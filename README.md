@@ -7,9 +7,7 @@ Custom JavaScript for Jellyfin that adds two sections to your home screen:
 
 Designed for the [Abyss theme](https://github.com/DesertCookie/jellyfin-abyss-theme) but works on any dark theme. Fully client-side — no plugins, no server-side changes.
 
-![Platform Hub](screenshots/platforms.png)
-![Top 10 Movies](screenshots/top10.png)
-![Mobile View](screenshots/mobile.png)
+![Jellyfin Custom Rows Demo](screenshots/demo.gif)
 
 ---
 
