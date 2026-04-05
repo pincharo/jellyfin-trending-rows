@@ -76,9 +76,9 @@ Hard-refresh your browser (`Ctrl+Shift+R` / `Cmd+Shift+R`). The new rows will ap
 
 ## Configuration
 
-### Adding or removing platforms
+### Adding or removing platforms and franchises
 
-Edit the `STUDIOS` array at the top of the script. Each entry takes:
+Edit the `STUDIOS` or `FRANCHISES` arrays at the top of the script. Each entry takes:
 
 ```javascript
 {
@@ -86,7 +86,28 @@ Edit the `STUDIOS` array at the top of the script. Each entry takes:
     tag: "HBO",                   // Jellyfin tag to filter by
     gradient: "linear-gradient(135deg, #1a0a2e 0%, #0a0a0a 100%)",
     logo: "https://example.com/hbo-logo.png",
-    invert: false                 // Set true if logo needs white inversion
+    invert: false,                // Optional: Set true if logo needs white inversion
+    big: false                    // Optional: Set true for logos that require a larger size
+}
+```
+
+### Changing the output order
+
+The rows are injected in a specific order by default. To change this, locate the `injectUI` function at the bottom of the script and reorder the `wrapper.appendChild` lines to match your preference:
+
+```javascript
+function injectUI() {
+    // ...
+    const wrapper = document.createElement("div");
+    wrapper.id = "custom-rows-wrapper";
+    
+    // REORDER THESE LINES TO CHANGE THE OUTPUT ORDER
+    wrapper.appendChild(buildStudioSection());                 // Platforms
+    wrapper.appendChild(buildTop10Section("Movies", "movie")); // Top 10 Movies
+    wrapper.appendChild(buildTop10Section("Series", "tv"));    // Top 10 Series
+    wrapper.appendChild(buildFranchiseSection());              // Franchises
+    
+    anchor.parentElement.insertBefore(wrapper, anchor.nextSibling);
 }
 ```
 

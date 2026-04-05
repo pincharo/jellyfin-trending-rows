@@ -1,12 +1,12 @@
 (function () {
     "use strict";
 
-    const TRAKT_CLIENT_ID = "6b7681626e6014e02e3be7ffce86f4fb6519e7b9acf6ff15d32df8130ff40bd5";
+    const TRAKT_CLIENT_ID = "YOUR_TRAKT_CLIENT_ID_HERE";
 
     /* ═══════════════════════════════════════════════════════════════
        PLATFORMS — streaming service hubs
-       Para añadir/quitar: comenta o descomenta el objeto entero.
-       Campos: name, tag (tag en Jellyfin), gradient, logo, invert (opcional, true si el logo es oscuro), big (opcional, true para logo más grande)
+       To add/remove: comment or uncomment the entire object.
+       Fields: name, tag (Jellyfin tag), gradient, logo, invert (optional, true if the logo is dark), big (optional, true for a larger logo)
     ═══════════════════════════════════════════════════════════════ */
     const STUDIOS = [
         { name: "Apple TV+", tag: "Apple TV", gradient: "linear-gradient(135deg,#1a1a2e 0%,#0a0a0a 100%)", logo: "https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/4KAy34EHvRM25Ih8wb82AuGU7zJ.png" },
@@ -14,20 +14,19 @@
         { name: "Prime Video", tag: "Amazon Prime Video", gradient: "linear-gradient(135deg,#0d1b2a 0%,#010409 100%)", logo: "https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/ifhbNuuVnlwYy5oXA5VIb2YR8AZ.png" },
         { name: "Netflix", tag: "Netflix", gradient: "linear-gradient(135deg,#1a0a0a 0%,#0d0000 100%)", logo: "https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/wwemzKWzjKYJFfCeiB57q3r4Bcm.png" },
         { name: "HBO Max", tag: "HBO Max", gradient: "linear-gradient(135deg,#1a0a2e 0%,#0d0018 100%)", logo: "https://image.tmdb.org/t/p/w500_filter(duotone,ffffff,bababa)/nmU0UMDJB3dRRQSTUqawzF2Od1a.png" },
-        { name: "Movistar+", tag: ["Movistar Plus+", "Movistar Plus+ Ficción Total"], gradient: "linear-gradient(135deg,#002a1a 0%,#001a10 100%)", logo: "https://image.tmdb.org/t/p/w500_filter(duotone,ffffff,bababa)/tZSV7HC7DVgzXwDSkuu3PkW8C1w.png" },
     ];
 
     /* ═══════════════════════════════════════════════════════════════
-       FRANCHISES — colecciones por franquicia
-       Para añadir/quitar: comenta o descomenta el objeto entero.
-       Campos:
-         name     → nombre visible en tooltip
-         tag      → tag exacto en Jellyfin (case-insensitive)
-         gradient → fondo de la card
-         logo     → URL del logo
-         invert   → (opcional) true si el logo es negro/oscuro → se pone blanco
-         big      → (opcional) true para logos que necesitan más tamaño
-       El contenido se ordena por fecha de estreno (más reciente primero).
+       FRANCHISES — collections by franchise
+       To add/remove: comment or uncomment the entire object.
+       Fields:
+         name     → visible name in tooltip
+         tag      → exact tag in Jellyfin (case-insensitive)
+         gradient → background of the card
+         logo     → logo URL
+         invert   → (optional) true if the logo is black/dark → turns white
+         big      → (optional) true for logos that require larger size
+       Content is sorted by release date (newest first).
     ═══════════════════════════════════════════════════════════════ */
     const FRANCHISES = [
         { name: "Marvel", tag: "marvel", gradient: "linear-gradient(135deg,#1a0a0a 0%,#2a0a0a 50%,#0a0a0a 100%)", logo: "https://image.tmdb.org/t/p/w780_filter(duotone,ffffff,bababa)/mIkZDuulwMPzESbzF9lg3rD8CcO.png" },
@@ -37,29 +36,29 @@
         { name: "Harry Potter", tag: "harry potter", gradient: "linear-gradient(135deg,#1a1420 0%,#0d0a18 50%,#0a0a0a 100%)", logo: "https://cdn.freebiesupply.com/images/large/2x/harry-potter-logo-png-transparent.png", invert: true },
         { name: "Pirates of the Caribbean", tag: "pirates of the caribbean", gradient: "linear-gradient(135deg,#0a1018 0%,#1a1a0a 50%,#0a0a0a 100%)", logo: "https://upload.wikimedia.org/wikipedia/commons/5/52/POTC_Logo.png", invert: true },
 
-        /* ── Plantilla para nuevas franquicias ──────────────────────
-        { name: "Nombre",       tag: "tag-en-jellyfin",  gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)", logo: "https://...", invert: false, big: false },
+        /* ── Template for new franchises ──────────────────────────────
+        { name: "Name",         tag: "jellyfin-tag",     gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)", logo: "https://...", invert: false, big: false },
         ──────────────────────────────────────────────────────────── */
 
-        // { name: "Alien",                tag: "alien",                    gradient: "linear-gradient(135deg,#0a0a0a 0%,#0a1a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Dune",                 tag: "dune",                     gradient: "linear-gradient(135deg,#1a1508 0%,#0d0a02 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Terminator",           tag: "terminator",               gradient: "linear-gradient(135deg,#0f0f1a 0%,#1a0a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Matrix",               tag: "matrix",                   gradient: "linear-gradient(135deg,#0a0a0a 0%,#001a00 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "John Wick",            tag: "john wick",                gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Fast & Furious",       tag: "fast and furious",         gradient: "linear-gradient(135deg,#1a0a00 0%,#0a0a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "James Bond",           tag: "james bond",               gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Jurassic Park",        tag: "jurassic park",            gradient: "linear-gradient(135deg,#0a1a0a 0%,#0a0a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Lord of the Rings",    tag: "lord of the rings",        gradient: "linear-gradient(135deg,#1a1a0a 0%,#0a0a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Shrek",                tag: "shrek",                    gradient: "linear-gradient(135deg,#0a1a0a 0%,#1a2a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Scream",               tag: "scream",                   gradient: "linear-gradient(135deg,#0a0a0a 0%,#0a0a1a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "The Conjuring",        tag: "the conjuring",            gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a0a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Mission: Impossible",  tag: "mission impossible",       gradient: "linear-gradient(135deg,#0a0a0a 0%,#0a0a1a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Peaky Blinders",       tag: "peaky blinders",           gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1410 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "The Godfather",        tag: "the godfather",            gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Transformers",         tag: "transformers",             gradient: "linear-gradient(135deg,#0a0a1a 0%,#1a0a1a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Halloween",            tag: "halloween",                gradient: "linear-gradient(135deg,#1a0a00 0%,#0a0a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "Planet of the Apes",   tag: "planet of the apes",       gradient: "linear-gradient(135deg,#0a0a0a 0%,#0a1a0a 50%,#0a0a0a 100%)",   logo: "URL_AQUI" },
-        // { name: "How to Train Your Dragon", tag: "how to train your dragon", gradient: "linear-gradient(135deg,#0a0a1a 0%,#0a1a1a 50%,#0a0a0a 100%)", logo: "URL_AQUI" },
+        // { name: "Alien",                tag: "alien",                    gradient: "linear-gradient(135deg,#0a0a0a 0%,#0a1a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Dune",                 tag: "dune",                     gradient: "linear-gradient(135deg,#1a1508 0%,#0d0a02 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Terminator",           tag: "terminator",               gradient: "linear-gradient(135deg,#0f0f1a 0%,#1a0a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Matrix",               tag: "matrix",                   gradient: "linear-gradient(135deg,#0a0a0a 0%,#001a00 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "John Wick",            tag: "john wick",                gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Fast & Furious",       tag: "fast and furious",         gradient: "linear-gradient(135deg,#1a0a00 0%,#0a0a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "James Bond",           tag: "james bond",               gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Jurassic Park",        tag: "jurassic park",            gradient: "linear-gradient(135deg,#0a1a0a 0%,#0a0a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Lord of the Rings",    tag: "lord of the rings",        gradient: "linear-gradient(135deg,#1a1a0a 0%,#0a0a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Shrek",                tag: "shrek",                    gradient: "linear-gradient(135deg,#0a1a0a 0%,#1a2a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Scream",               tag: "scream",                   gradient: "linear-gradient(135deg,#0a0a0a 0%,#0a0a1a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "The Conjuring",        tag: "the conjuring",            gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a0a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Mission: Impossible",  tag: "mission impossible",       gradient: "linear-gradient(135deg,#0a0a0a 0%,#0a0a1a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Peaky Blinders",       tag: "peaky blinders",           gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1410 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "The Godfather",        tag: "the godfather",            gradient: "linear-gradient(135deg,#0a0a0a 0%,#1a1a1a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Transformers",         tag: "transformers",             gradient: "linear-gradient(135deg,#0a0a1a 0%,#1a0a1a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Halloween",            tag: "halloween",                gradient: "linear-gradient(135deg,#1a0a00 0%,#0a0a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "Planet of the Apes",   tag: "planet of the apes",       gradient: "linear-gradient(135deg,#0a0a0a 0%,#0a1a0a 50%,#0a0a0a 100%)",   logo: "URL_HERE" },
+        // { name: "How to Train Your Dragon", tag: "how to train your dragon", gradient: "linear-gradient(135deg,#0a0a1a 0%,#0a1a1a 50%,#0a0a0a 100%)", logo: "URL_HERE" },
     ];
 
     /* ═══════════════════════════════════════════════════════════════
@@ -189,7 +188,7 @@
         } catch { return []; }
     }
 
-    /** Busca items por tag (string o array). SortOrder=Descending → lo más nuevo primero */
+    /** Fetch items by tag (string or array). SortOrder=Descending → newest first */
     async function fetchByTag(tag) {
         const { token, userId, base } = gc();
         if (!token || !userId) return [];
@@ -270,7 +269,7 @@
     }
 
     /* ═══════════════════════════════════════════════════════════════
-       TOGGLE LOGIC — estados independientes para Platforms y Franchises
+       TOGGLE LOGIC — independent states for Platforms and Franchises
     ═══════════════════════════════════════════════════════════════ */
     let currentPlatformOpen = null;
     let currentFranchiseOpen = null;
@@ -434,7 +433,7 @@
 
     /* ═══════════════════════════════════════════════════════════════
        INJECT INTO HOME
-       Orden: Platforms → Franchises → Top 10 Movies → Top 10 Series
+       Order: Platforms → Franchises → Top 10 Movies → Top 10 Series
     ═══════════════════════════════════════════════════════════════ */
     function injectUI() {
         if (document.getElementById("custom-rows-wrapper")) return;
