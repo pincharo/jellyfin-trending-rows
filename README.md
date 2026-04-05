@@ -46,11 +46,14 @@ Save it and copy the **Client ID**.
 
 ### 2. Add the script to Jellyfin
 
-1. Open your Jellyfin dashboard
-2. Go to **General** → scroll to **Custom JavaScript**
-3. Paste the contents of [`jellyfin-custom-rows.js`](jellyfin-custom-rows.js)
-4. Replace `YOUR_TRAKT_CLIENT_ID_HERE` with your actual Client ID
-5. Save
+This script integrates with the [Jellyfin-JavaScript-Injector plugin](https://github.com/n00bcodr/Jellyfin-JavaScript-Injector).
+
+1. Install the JS Injector plugin following the instructions in its repository
+2. Open your Jellyfin dashboard
+3. Go to **Plugins** → **JavaScript Injector**
+4. Add a new script and paste the contents of [`jellyfin-custom-rows.js`](jellyfin-custom-rows.js)
+5. Replace `YOUR_TRAKT_CLIENT_ID_HERE` with your actual Client ID
+6. Save
 
 ### 3. Tag your content (for Platform Hub)
 
