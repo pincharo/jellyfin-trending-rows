@@ -1,0 +1,18 @@
+{
+  "name": "iptv-stremio-addon",
+  "version": "1.0.0",
+  "description": "Addon Stremio/Nuvio para IPTV privado con EPG y filas deportivas",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.6.0",
+    "cookie-parser": "^1.4.6",
+    "express": "^5.0.1",
+    "saxes": "^6.0.0",
+    "sharp": "^0.33.4"
+  }
+}

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IPTV Admin</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Login -->
+  <div id="login-screen" class="screen">
+    <div class="login-card">
+      <h1>IPTV<span>Admin</span></h1>
+      <form id="login-form">
+        <input type="password" id="login-password" placeholder="Contraseña maestra" autofocus />
+        <button type="submit">Entrar</button>
+      </form>
+      <p id="login-error" class="error hidden"></p>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div id="app-screen" class="screen hidden">
+    <nav>
+      <span class="logo">IPTV<b>Admin</b></span>
+      <button class="tab-btn active" data-tab="playlists">Playlists</button>
+      <button class="tab-btn" data-tab="channels">Canales</button>
+      <button class="tab-btn" data-tab="rows">Filas</button>
+      <button class="tab-btn" data-tab="epg">EPG</button>
+      <button class="tab-btn" data-tab="settings">Ajustes</button>
+      <button id="logout-btn" class="btn-ghost">Salir</button>
+    </nav>
+
+    <main>
+      <!-- Playlists tab -->
+      <section id="tab-playlists" class="tab-pane active">
+        <div class="pane-header">
+          <h2>Playlists M3U</h2>
+          <button class="btn" onclick="App.openAddPlaylist()">+ Añadir</button>
+        </div>
+        <div id="playlists-list"></div>
+      </section>
+
+      <!-- Channels tab -->
+      <section id="tab-channels" class="tab-pane hidden">
+        <div class="pane-header">
+          <h2>Canales lógicos</h2>
+          <button class="btn" onclick="App.openAddChannel()">+ Nuevo canal</button>
+        </div>
+        <input class="search-input" type="text" id="channel-search" placeholder="Buscar canal…" oninput="App.filterChannels(this.value)" />
+        <div id="channels-list"></div>
+      </section>
+
+      <!-- Rows tab -->
+      <section id="tab-rows" class="tab-pane hidden">
+        <div class="pane-header">
+          <h2>Filas del addon</h2>
+          <p class="hint">Cada fila aparece como una sección en Stremio/Nuvio</p>
+        </div>
+        <div id="rows-list"></div>
+      </section>
+
+      <!-- EPG tab -->
+      <section id="tab-epg" class="tab-pane hidden">
+        <div class="pane-header">
+          <h2>Fuentes EPG</h2>
+          <button class="btn" onclick="App.openAddEpg()">+ Añadir fuente</button>
+        </div>
+        <div id="epg-sources-list"></div>
+        <div class="pane-header" style="margin-top:2rem">
+          <h2>Mapeo de canales EPG</h2>
+          <button class="btn" onclick="App.autoMatchEpg()">Auto-emparejar</button>
+        </div>
+        <div id="epg-map-list"></div>
+      </section>
+
+      <!-- Settings tab -->
+      <section id="tab-settings" class="tab-pane hidden">
+        <div class="pane-header"><h2>Ajustes</h2></div>
+        <form id="settings-form" class="settings-form" onsubmit="App.saveSettings(event)">
+          <label>Token del addon <input name="addon_token" /></label>
+          <label>Refresh playlists (horas) <input name="playlist_refresh_hours" type="number" min="1" /></label>
+          <label>Refresh EPG (horas) <input name="epg_refresh_hours" type="number" min="1" /></label>
+          <label>URL manifest (solo lectura) <input id="manifest-url" readonly onclick="this.select()" /></label>
+          <button type="submit" class="btn">Guardar</button>
+        </form>
+        <div id="status-panel" style="margin-top:2rem"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-overlay" class="hidden" onclick="App.closeModal()">
+    <div id="modal-box" onclick="e=>e.stopPropagation()">
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
