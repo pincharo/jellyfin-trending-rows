@@ -11,9 +11,10 @@
   <div id="login-screen" class="screen">
     <div class="login-card">
       <h1>IPTV<span>Admin</span></h1>
+      <p class="login-hint">Panel de control del addon para Stremio y Nuvio</p>
       <form id="login-form">
         <input type="password" id="login-password" placeholder="Contraseña maestra" autofocus />
-        <button type="submit">Entrar</button>
+        <button type="submit" class="btn">Entrar</button>
       </form>
       <p id="login-error" class="error hidden"></p>
     </div>
@@ -23,21 +24,34 @@
   <div id="app-screen" class="screen hidden">
     <nav>
       <span class="logo">IPTV<b>Admin</b></span>
-      <button class="tab-btn active" data-tab="playlists">Playlists</button>
+      <button class="tab-btn active" data-tab="home">Inicio</button>
+      <button class="tab-btn" data-tab="playlists">Playlists</button>
       <button class="tab-btn" data-tab="channels">Canales</button>
       <button class="tab-btn" data-tab="rows">Filas</button>
       <button class="tab-btn" data-tab="epg">EPG</button>
+      <button class="tab-btn" data-tab="logs">Logs</button>
       <button class="tab-btn" data-tab="settings">Ajustes</button>
       <button id="logout-btn" class="btn-ghost">Salir</button>
     </nav>
 
     <main>
+      <!-- Home / setup guide tab -->
+      <section id="tab-home" class="tab-pane">
+        <div class="pane-header">
+          <h2>Puesta en marcha</h2>
+          <p class="hint">Sigue estos pasos en orden. Cada paso se marca ✓ automáticamente cuando lo completas.</p>
+        </div>
+        <div id="setup-steps"></div>
+        <div id="manifest-card"></div>
+      </section>
+
       <!-- Playlists tab -->
-      <section id="tab-playlists" class="tab-pane active">
+      <section id="tab-playlists" class="tab-pane hidden">
         <div class="pane-header">
           <h2>Playlists M3U</h2>
           <button class="btn" onclick="App.openAddPlaylist()">+ Añadir</button>
         </div>
+        <p class="hint">Tu lista IPTV. Tras añadirla pulsa <b>↻ Refrescar</b> para importar sus canales.</p>
         <div id="playlists-list"></div>
       </section>
 
@@ -47,6 +61,7 @@
           <h2>Canales lógicos</h2>
           <button class="btn" onclick="App.openAddChannel()">+ Nuevo canal</button>
         </div>
+        <p class="hint">Un canal lógico (ej. "M+ LaLiga") agrupa varios canales de tu IPTV como fuentes alternativas. En Stremio verás un solo canal con varias fuentes para elegir.</p>
         <input class="search-input" type="text" id="channel-search" placeholder="Buscar canal…" oninput="App.filterChannels(this.value)" />
         <div id="channels-list"></div>
       </section>
@@ -55,8 +70,8 @@
       <section id="tab-rows" class="tab-pane hidden">
         <div class="pane-header">
           <h2>Filas del addon</h2>
-          <p class="hint">Cada fila aparece como una sección en Stremio/Nuvio</p>
         </div>
+        <p class="hint">Cada fila es una sección en Stremio/Nuvio (Canales, Fútbol, Baloncesto, Motor). Añade tus canales lógicos a las filas donde quieras que aparezcan.</p>
         <div id="rows-list"></div>
       </section>
 
@@ -66,22 +81,36 @@
           <h2>Fuentes EPG</h2>
           <button class="btn" onclick="App.openAddEpg()">+ Añadir fuente</button>
         </div>
+        <p class="hint">La guía de programación. La guía dobleM (España) ya viene configurada: pulsa <b>↻ Refrescar</b> para cargarla y después <b>Auto-emparejar</b> para conectarla con tus canales.</p>
         <div id="epg-sources-list"></div>
         <div class="pane-header" style="margin-top:2rem">
           <h2>Mapeo de canales EPG</h2>
-          <button class="btn" onclick="App.autoMatchEpg()">Auto-emparejar</button>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn" onclick="App.autoMatchEpg()">⚡ Auto-emparejar</button>
+            <button class="btn-ghost" onclick="App.openManualMap()">Mapear a mano</button>
+          </div>
         </div>
         <div id="epg-map-list"></div>
+      </section>
+
+      <!-- Logs tab -->
+      <section id="tab-logs" class="tab-pane hidden">
+        <div class="pane-header">
+          <h2>Logs</h2>
+          <label class="log-autorefresh"><input type="checkbox" id="logs-auto" checked /> Auto-actualizar</label>
+          <button class="btn-ghost" onclick="App.loadLogs()">↻ Actualizar</button>
+        </div>
+        <p class="hint">Actividad del servidor: descargas de listas, EPG, peticiones de Stremio y errores.</p>
+        <div id="logs-list" class="logs-box"></div>
       </section>
 
       <!-- Settings tab -->
       <section id="tab-settings" class="tab-pane hidden">
         <div class="pane-header"><h2>Ajustes</h2></div>
         <form id="settings-form" class="settings-form" onsubmit="App.saveSettings(event)">
-          <label>Token del addon <input name="addon_token" /></label>
-          <label>Refresh playlists (horas) <input name="playlist_refresh_hours" type="number" min="1" /></label>
-          <label>Refresh EPG (horas) <input name="epg_refresh_hours" type="number" min="1" /></label>
-          <label>URL manifest (solo lectura) <input id="manifest-url" readonly onclick="this.select()" /></label>
+          <label>Token del addon (cambia la URL de instalación) <input name="addon_token" /></label>
+          <label>Refresco automático de playlists (horas) <input name="playlist_refresh_hours" type="number" min="1" placeholder="6" /></label>
+          <label>Refresco automático de EPG (horas) <input name="epg_refresh_hours" type="number" min="1" placeholder="12" /></label>
           <button type="submit" class="btn">Guardar</button>
         </form>
         <div id="status-panel" style="margin-top:2rem"></div>
@@ -90,11 +119,14 @@
   </div>
 
   <!-- Modals -->
-  <div id="modal-overlay" class="hidden" onclick="App.closeModal()">
-    <div id="modal-box" onclick="e=>e.stopPropagation()">
+  <div id="modal-overlay" class="hidden">
+    <div id="modal-box">
       <div id="modal-content"></div>
     </div>
   </div>
+
+  <!-- Toasts -->
+  <div id="toast-container"></div>
 
   <script src="app.js"></script>
 </body>

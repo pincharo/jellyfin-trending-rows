@@ -4,6 +4,7 @@ import { login, logout, requireAuth } from '../auth.js';
 import { refreshPlaylist } from '../services/playlistRefresh.js';
 import { refreshEpgSource, autoMatchEpg } from '../services/epgRefresh.js';
 import { slugify, sha1hex } from '../util/index.js';
+import { getLogs } from '../util/logger.js';
 import { reschedule } from '../services/scheduler.js';
 
 const router = Router();
@@ -257,10 +258,17 @@ router.get('/status', (req, res) => {
     playlists: db.prepare('SELECT COUNT(*) as c FROM playlists').get().c,
     raw_channels: db.prepare('SELECT COUNT(*) as c FROM raw_channels WHERE stale=0').get().c,
     logical_channels: db.prepare('SELECT COUNT(*) as c FROM logical_channels').get().c,
+    channels_with_sources: db.prepare('SELECT COUNT(DISTINCT logical_channel_id) as c FROM channel_sources').get().c,
+    channels_in_rows: db.prepare('SELECT COUNT(DISTINCT logical_channel_id) as c FROM channel_rows').get().c,
     epg_sources: db.prepare('SELECT COUNT(*) as c FROM epg_sources').get().c,
     programmes: db.prepare('SELECT COUNT(*) as c FROM programmes').get().c,
     epg_mapped: db.prepare('SELECT COUNT(*) as c FROM epg_channel_map').get().c,
   });
+});
+
+// ── Logs ──────────────────────────────────────────────────────────────────────
+router.get('/logs', (req, res) => {
+  res.json(getLogs(Number(req.query.limit) || 200));
 });
 
 export default router;

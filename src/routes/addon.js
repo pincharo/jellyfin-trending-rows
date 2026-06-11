@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { BASE_URL, ADDON_TOKEN } from '../config.js';
 import { channelsForRow, channelMeta, channelStreams } from '../services/catalog.js';
+import { logInfo, logWarn } from '../util/logger.js';
 
 const router = Router({ mergeParams: true });
 
@@ -9,7 +10,10 @@ const router = Router({ mergeParams: true });
 router.use((req, res, next) => {
   const { token } = req.params;
   const expected = db.prepare("SELECT value FROM settings WHERE key='addon_token'").get()?.value || ADDON_TOKEN;
-  if (expected && token !== expected) return res.status(403).json({ error: 'Token inválido' });
+  if (expected && token !== expected) {
+    logWarn(`Addon: petición con token inválido desde ${req.ip} (${req.originalUrl})`);
+    return res.status(403).json({ error: 'Token inválido' });
+  }
   next();
 });
 
@@ -80,6 +84,7 @@ router.get('/stream/tv/:id.json', (req, res) => {
 
   const slug = id.slice(5);
   const streams = channelStreams(slug);
+  logInfo(`Addon: streams solicitados para "${slug}" → ${streams.length} fuentes`);
   res.json({ streams });
 });
 

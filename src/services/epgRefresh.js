@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import db from '../db.js';
 import { parseXMLTV } from './xmltv.js';
 import { normalizeChannelName, fetchWithTimeout } from '../util/index.js';
+import { logInfo, logError } from '../util/logger.js';
 import { DATA_DIR } from '../config.js';
 
 const CACHE_DIR = join(DATA_DIR, 'epg_cache');
@@ -12,6 +13,8 @@ const CACHE_DIR = join(DATA_DIR, 'epg_cache');
 export async function refreshEpgSource(sourceId) {
   const source = db.prepare('SELECT * FROM epg_sources WHERE id=?').get(sourceId);
   if (!source) throw new Error(`EPG source ${sourceId} not found`);
+
+  logInfo(`EPG "${source.name}": descargando guía…`);
 
   await mkdir(CACHE_DIR, { recursive: true });
   const cacheFile = join(CACHE_DIR, `epg_${sourceId}.xml.gz`);
@@ -24,9 +27,11 @@ export async function refreshEpgSource(sourceId) {
     await writeFile(cacheFile, buf);
     stream = Readable.from(buf);
   } catch (err) {
+    const msg = err.name === 'AbortError' ? 'Timeout (120s) descargando la guía' : err.message;
+    logError(`EPG "${source.name}": ${msg}`);
     db.prepare('UPDATE epg_sources SET last_fetched_at=?,last_status=? WHERE id=?')
-      .run(Math.floor(Date.now() / 1000), `Error: ${err.message}`, sourceId);
-    throw err;
+      .run(Math.floor(Date.now() / 1000), `Error: ${msg}`, sourceId);
+    throw new Error(msg);
   }
 
   const upsertChannel = db.prepare(`
@@ -73,12 +78,13 @@ export async function refreshEpgSource(sourceId) {
   const progCount = db.prepare('SELECT COUNT(*) as c FROM programmes WHERE epg_source_id=?').get(sourceId).c;
 
   db.prepare('UPDATE epg_sources SET last_fetched_at=?,last_status=? WHERE id=?')
-    .run(Math.floor(Date.now() / 1000), `OK (${progCount} programmes)`, sourceId);
+    .run(Math.floor(Date.now() / 1000), `OK (${progCount} programas)`, sourceId);
 
   // prune programmes older than 24h
   const cutoff = Math.floor(Date.now() / 1000) - 86400;
   db.prepare('DELETE FROM programmes WHERE stop < ?').run(cutoff);
 
+  logInfo(`EPG "${source.name}": ${progCount} programas cargados`);
   return progCount;
 }
 
@@ -143,5 +149,6 @@ export function autoMatchEpg() {
     }
   }
 
+  logInfo(`Auto-match EPG: ${matched}/${logicals.length} canales emparejados`);
   return matched;
 }

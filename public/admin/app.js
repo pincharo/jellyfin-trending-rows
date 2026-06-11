@@ -6,13 +6,23 @@ async function api(method, path, body) {
   if (body !== undefined) opts.body = JSON.stringify(body);
   const res = await fetch(API + path, opts);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(data.error || `Error HTTP ${res.status}`);
   return data;
 }
 
 const $ = id => document.getElementById(id);
 
-// ── Auth ───────────────────────────────────────────────────────────────────────
+// ── Toasts ────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  $('toast-container').appendChild(el);
+  setTimeout(() => el.classList.add('show'), 10);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 4500);
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   checkSession();
 
@@ -34,13 +44,11 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
-      btn.classList.add('active');
-      $('tab-' + btn.dataset.tab).classList.remove('hidden');
-      App.loadTab(btn.dataset.tab);
-    });
+    btn.addEventListener('click', () => App.switchTab(btn.dataset.tab));
+  });
+
+  $('modal-overlay').addEventListener('click', e => {
+    if (e.target === $('modal-overlay')) closeModal();
   });
 });
 
@@ -61,55 +69,149 @@ function showLogin() {
 function showApp() {
   $('login-screen').classList.add('hidden');
   $('app-screen').classList.remove('hidden');
-  App.loadTab('playlists');
+  App.switchTab('home');
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function openModal(html) {
   $('modal-content').innerHTML = html;
   $('modal-overlay').classList.remove('hidden');
-  $('modal-box').addEventListener('click', e => e.stopPropagation(), { once: true });
 }
 function closeModal() { $('modal-overlay').classList.add('hidden'); }
-$('modal-overlay')?.addEventListener('click', closeModal);
 
 // ── App ───────────────────────────────────────────────────────────────────────
 const App = {
   _channels: [],
-  _rows: [],
+  _logsTimer: null,
+
+  switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+    $('tab-' + tab).classList.remove('hidden');
+    clearInterval(this._logsTimer);
+    this.loadTab(tab);
+  },
 
   loadTab(tab) {
+    if (tab === 'home')      this.loadHome();
     if (tab === 'playlists') this.loadPlaylists();
     if (tab === 'channels')  this.loadChannels();
     if (tab === 'rows')      this.loadRows();
     if (tab === 'epg')       this.loadEpg();
+    if (tab === 'logs')      this.startLogs();
     if (tab === 'settings')  this.loadSettings();
   },
 
   closeModal: closeModal,
 
+  // ── Home / setup guide ──────────────────────────────────────────────────────
+  async loadHome() {
+    const [s, settings] = await Promise.all([api('GET', '/status'), api('GET', '/settings')]);
+
+    const steps = [
+      {
+        done: s.playlists > 0 && s.raw_channels > 0,
+        title: '1 · Añade tu lista IPTV',
+        desc: s.playlists === 0
+          ? 'Ve a Playlists, añade la URL M3U de tu proveedor y pulsa ↻ Refrescar.'
+          : s.raw_channels === 0
+            ? `Tienes ${s.playlists} playlist pero sin canales importados — pulsa ↻ Refrescar en Playlists. Si da error, revisa la pestaña Logs.`
+            : `${s.raw_channels} canales importados de tu IPTV.`,
+        tab: 'playlists',
+      },
+      {
+        done: s.channels_with_sources > 0,
+        title: '2 · Crea tus canales',
+        desc: s.logical_channels === 0
+          ? 'Ve a Canales, crea por ejemplo "M+ LaLiga" y añádele como fuentes los canales de tu IPTV que lo emiten (puedes poner varios: serán fuentes alternativas).'
+          : s.channels_with_sources === 0
+            ? `Tienes ${s.logical_channels} canal(es) pero sin fuentes — entra en cada canal y pulsa "Fuentes" para añadirle canales de tu IPTV.`
+            : `${s.channels_with_sources} canal(es) con fuentes configuradas.`,
+        tab: 'channels',
+      },
+      {
+        done: s.channels_in_rows > 0,
+        title: '3 · Colócalos en filas',
+        desc: s.channels_in_rows === 0
+          ? 'Ve a Filas y añade tus canales a las secciones donde quieres verlos en Stremio: Canales, Fútbol, Baloncesto o Motor.'
+          : `${s.channels_in_rows} canal(es) asignados a filas.`,
+        tab: 'rows',
+      },
+      {
+        done: s.programmes > 0 && s.epg_mapped > 0,
+        title: '4 · Carga la guía (EPG)',
+        desc: s.programmes === 0
+          ? 'Ve a EPG y pulsa ↻ Refrescar en la guía dobleM (tarda unos segundos). Después pulsa ⚡ Auto-emparejar.'
+          : s.epg_mapped === 0
+            ? `Guía cargada (${s.programmes.toLocaleString('es')} programas) — ahora pulsa ⚡ Auto-emparejar en EPG para conectarla con tus canales.`
+            : `${s.epg_mapped} canal(es) con guía. ${s.programmes.toLocaleString('es')} programas cargados.`,
+        tab: 'epg',
+      },
+    ];
+
+    $('setup-steps').innerHTML = steps.map(st => `
+      <div class="setup-step ${st.done ? 'done' : ''}" onclick="App.switchTab('${st.tab}')">
+        <div class="step-check">${st.done ? '✓' : '○'}</div>
+        <div class="step-body">
+          <div class="step-title">${st.title}</div>
+          <div class="step-desc">${st.desc}</div>
+        </div>
+        <div class="step-go">→</div>
+      </div>
+    `).join('');
+
+    const allDone = steps.every(st => st.done);
+    const manifestUrl = settings.addon_token
+      ? `${location.origin}/${settings.addon_token}/manifest.json`
+      : '';
+
+    $('manifest-card').innerHTML = `
+      <div class="manifest-card ${allDone ? 'ready' : ''}">
+        <div class="step-title">${allDone ? '✓ ¡Todo listo! Instala el addon' : '5 · Instala el addon en Stremio / Nuvio'}</div>
+        <div class="step-desc">Copia esta URL y pégala en Stremio (Addons → buscador) o en Nuvio:</div>
+        <div class="manifest-url-row">
+          <input readonly value="${esc(manifestUrl)}" onclick="this.select()" />
+          <button class="btn" onclick="App.copyManifest('${esc(manifestUrl)}')">Copiar</button>
+        </div>
+        <div class="step-desc" style="margin-top:.5rem">⚠ Para usarlo fuera de casa el servidor debe ser accesible desde internet (cambia BASE_URL en el .env si usas IP/dominio público).</div>
+      </div>
+    `;
+  },
+
+  copyManifest(url) {
+    navigator.clipboard.writeText(url)
+      .then(() => toast('URL copiada al portapapeles', 'ok'))
+      .catch(() => toast('No se pudo copiar — selecciónala a mano', 'err'));
+  },
+
   // ── Playlists ──────────────────────────────────────────────────────────────
   async loadPlaylists() {
     const list = await api('GET', '/playlists');
     const el = $('playlists-list');
-    if (!list.length) { el.innerHTML = '<p class="empty-state">No hay playlists. Añade una lista M3U.</p>'; return; }
+    if (!list.length) {
+      el.innerHTML = `<div class="empty-state">
+        <p>No hay ninguna lista todavía.</p>
+        <button class="btn" onclick="App.openAddPlaylist()" style="margin-top:.8rem">+ Añadir mi lista M3U</button>
+      </div>`;
+      return;
+    }
     el.innerHTML = list.map(p => `
       <div class="card">
         <div class="card-icon-placeholder">M3U</div>
         <div class="card-body">
           <div class="card-title">${esc(p.name)}</div>
           <div class="card-subtitle">${esc(p.url)}</div>
-          <div style="margin-top:.3rem">
+          <div style="margin-top:.35rem">
             ${p.last_status === 'OK'
-              ? `<span class="badge badge-ok">OK · ${p.channel_count} canales</span>`
+              ? `<span class="badge badge-ok">✓ ${p.channel_count} canales</span>`
               : p.last_status
-                ? `<span class="badge badge-err">${esc(p.last_status)}</span>`
-                : '<span class="badge badge-idle">Sin refrescar</span>'}
-            ${p.last_fetched_at ? `<span style="color:var(--text2);font-size:.78rem;margin-left:.5rem">${relTime(p.last_fetched_at)}</span>` : ''}
+                ? `<span class="badge badge-err" title="${esc(p.last_status)}">✕ ${esc(p.last_status.slice(0, 90))}</span>`
+                : '<span class="badge badge-idle">Pendiente de refrescar</span>'}
+            ${p.last_fetched_at ? `<span class="time-ago">${relTime(p.last_fetched_at)}</span>` : ''}
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn btn-sm" onclick="App.refreshPlaylist(${p.id})">↻ Refrescar</button>
+          <button class="btn btn-sm" onclick="App.refreshPlaylist(${p.id}, this)">↻ Refrescar</button>
           <button class="btn btn-sm btn-danger" onclick="App.deletePlaylist(${p.id})">✕</button>
         </div>
       </div>
@@ -119,8 +221,8 @@ const App = {
   openAddPlaylist() {
     openModal(`
       <h3>Añadir playlist M3U</h3>
-      <div class="form-group"><label>Nombre</label><input id="pl-name" placeholder="Mi lista IPTV" /></div>
-      <div class="form-group"><label>URL (.m3u / .m3u8)</label><input id="pl-url" placeholder="http://..." /></div>
+      <div class="form-group"><label>Nombre (para identificarla)</label><input id="pl-name" placeholder="Mi lista IPTV" /></div>
+      <div class="form-group"><label>URL de la lista (.m3u / .m3u8 / get.php…)</label><input id="pl-url" placeholder="http://proveedor.com/get.php?username=…" /></div>
       <div class="form-actions">
         <button class="btn-ghost" onclick="App.closeModal()">Cancelar</button>
         <button class="btn" onclick="App.addPlaylist()">Añadir</button>
@@ -131,25 +233,32 @@ const App = {
   async addPlaylist() {
     const name = $('pl-name').value.trim();
     const url  = $('pl-url').value.trim();
-    if (!name || !url) return alert('Rellena todos los campos');
-    await api('POST', '/playlists', { name, url });
-    closeModal();
-    this.loadPlaylists();
+    if (!name || !url) return toast('Rellena nombre y URL', 'err');
+    try {
+      await api('POST', '/playlists', { name, url });
+      closeModal();
+      toast('Playlist añadida — ahora pulsa ↻ Refrescar para importar los canales', 'ok');
+      this.loadPlaylists();
+    } catch (err) { toast(err.message, 'err'); }
   },
 
-  async refreshPlaylist(id) {
-    const btn = event.target;
-    btn.textContent = '…';
+  async refreshPlaylist(id, btn) {
+    const orig = btn.textContent;
+    btn.textContent = 'Descargando…'; btn.disabled = true;
     try {
       const r = await api('POST', `/playlists/${id}/refresh`);
-      alert(`Refrescado: ${r.count} canales`);
-    } catch (err) { alert(err.message); }
+      toast(`Lista refrescada: ${r.count} canales importados`, 'ok');
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+    btn.textContent = orig; btn.disabled = false;
     this.loadPlaylists();
   },
 
   async deletePlaylist(id) {
-    if (!confirm('¿Eliminar esta playlist? Se borrarán sus canales raw.')) return;
+    if (!confirm('¿Eliminar esta playlist? Se borrarán sus canales importados.')) return;
     await api('DELETE', `/playlists/${id}`);
+    toast('Playlist eliminada', 'ok');
     this.loadPlaylists();
   },
 
@@ -162,7 +271,14 @@ const App = {
 
   _renderChannels(list) {
     const el = $('channels-list');
-    if (!list.length) { el.innerHTML = '<p class="empty-state">No hay canales lógicos aún.</p>'; return; }
+    if (!list.length) {
+      el.innerHTML = `<div class="empty-state">
+        <p>No hay canales lógicos todavía.</p>
+        <p style="margin-top:.4rem;font-size:.85rem">Crea uno (ej. "M+ LaLiga") y añádele como fuentes los canales de tu IPTV.</p>
+        <button class="btn" onclick="App.openAddChannel()" style="margin-top:.8rem">+ Crear mi primer canal</button>
+      </div>`;
+      return;
+    }
     el.innerHTML = list.map(ch => `
       <div class="card">
         ${ch.logo_url
@@ -170,10 +286,10 @@ const App = {
           : `<div class="card-icon-placeholder">TV</div>`}
         <div class="card-body">
           <div class="card-title">${esc(ch.name)}</div>
-          <div class="card-subtitle">iptv:${esc(ch.slug)}</div>
+          <div class="card-subtitle">id: iptv:${esc(ch.slug)}</div>
         </div>
         <div class="card-actions">
-          <button class="btn btn-sm" onclick="App.openSources(${ch.id},'${esc(ch.name)}')">Fuentes</button>
+          <button class="btn btn-sm" onclick="App.openSources(${ch.id},'${escAttr(ch.name)}')">⚙ Fuentes</button>
           <button class="btn btn-sm btn-danger" onclick="App.deleteChannel(${ch.id})">✕</button>
         </div>
       </div>
@@ -188,8 +304,8 @@ const App = {
   openAddChannel() {
     openModal(`
       <h3>Nuevo canal lógico</h3>
-      <div class="form-group"><label>Nombre del canal</label><input id="ch-name" placeholder="M+ LaLiga" /></div>
-      <div class="form-group"><label>Logo URL (opcional)</label><input id="ch-logo" placeholder="https://…" /></div>
+      <div class="form-group"><label>Nombre del canal (como quieres verlo en Stremio)</label><input id="ch-name" placeholder="M+ LaLiga" /></div>
+      <div class="form-group"><label>Logo URL (opcional — si lo dejas vacío se usará el del EPG)</label><input id="ch-logo" placeholder="https://…" /></div>
       <div class="form-actions">
         <button class="btn-ghost" onclick="App.closeModal()">Cancelar</button>
         <button class="btn" onclick="App.addChannel()">Crear</button>
@@ -200,92 +316,93 @@ const App = {
   async addChannel() {
     const name = $('ch-name').value.trim();
     const logo = $('ch-logo').value.trim();
-    if (!name) return alert('Introduce un nombre');
-    await api('POST', '/channels', { name, logo_url: logo });
-    closeModal();
-    this.loadChannels();
+    if (!name) return toast('Introduce un nombre', 'err');
+    try {
+      const r = await api('POST', '/channels', { name, logo_url: logo });
+      closeModal();
+      toast('Canal creado — ahora añádele fuentes', 'ok');
+      await this.loadChannels();
+      this.openSources(r.id, name);
+    } catch (err) { toast(err.message, 'err'); }
   },
 
   async deleteChannel(id) {
     if (!confirm('¿Eliminar este canal y sus fuentes?')) return;
     await api('DELETE', `/channels/${id}`);
+    toast('Canal eliminado', 'ok');
     this.loadChannels();
   },
 
   async openSources(channelId, channelName) {
     const sources = await api('GET', `/channels/${channelId}/sources`);
     openModal(`
-      <h3>Fuentes · ${esc(channelName)}</h3>
+      <h3>Fuentes de "${esc(channelName)}"</h3>
+      <p class="modal-hint">Cada fuente es un canal de tu IPTV. En Stremio aparecerán como "Fuente 1", "Fuente 2"… por orden.</p>
       <div class="sources-list" id="sources-list">
         ${sources.length ? sources.map((s, i) => `
           <div class="source-item" id="src-${s.id}">
             <span class="source-num">${i + 1}</span>
             ${s.tvg_logo ? `<img src="${esc(s.tvg_logo)}" style="width:28px;height:28px;border-radius:4px;object-fit:cover">` : ''}
             <span class="source-name">${esc(s.tvg_name)}</span>
-            <span style="color:var(--text2);font-size:.78rem">${esc(s.label || '')}</span>
-            <button class="btn btn-sm btn-danger" onclick="App.removeSource(${channelId},${s.id})">✕</button>
+            <button class="btn btn-sm btn-danger" onclick="App.removeSource(${channelId},${s.id},'${escAttr(channelName)}')">✕</button>
           </div>
-        `).join('') : '<p style="color:var(--text2);font-size:.88rem">Sin fuentes todavía.</p>'}
+        `).join('') : '<p class="modal-hint">Sin fuentes todavía. Busca abajo entre los canales de tu IPTV.</p>'}
       </div>
       <div style="margin-top:1rem">
-        <button class="btn btn-sm" onclick="App.openSourcePicker(${channelId})">+ Añadir fuente IPTV</button>
+        <input class="picker-search" id="picker-q" placeholder="🔍 Buscar en tu lista IPTV (ej: laliga)…" oninput="App.searchRaw(this.value,${channelId},'${escAttr(channelName)}')" />
+        <div class="picker-list" id="picker-list"></div>
       </div>
     `);
+    const q = $('picker-q');
+    if (q) q.focus();
   },
 
-  async removeSource(channelId, srcId) {
+  async removeSource(channelId, srcId, channelName) {
     await api('DELETE', `/channels/${channelId}/sources/${srcId}`);
-    this.openSources(channelId, '');
+    this.openSources(channelId, channelName);
   },
 
-  async openSourcePicker(channelId) {
-    openModal(`
-      <h3>Añadir fuente IPTV</h3>
-      <input class="picker-search" id="picker-q" placeholder="Buscar canal raw…" oninput="App.searchRaw(this.value,${channelId})" />
-      <div class="picker-list" id="picker-list"><p style="color:var(--text2)">Escribe para buscar…</p></div>
-    `);
-  },
-
-  async searchRaw(q, channelId) {
-    if (q.length < 2) return;
+  async searchRaw(q, channelId, channelName) {
+    if (q.length < 2) { $('picker-list').innerHTML = ''; return; }
     const results = await api('GET', `/raw-channels?search=${encodeURIComponent(q)}&limit=40`);
     const el = $('picker-list');
+    if (!el) return;
     el.innerHTML = results.map(rc => `
-      <div class="picker-item" onclick="App.addSource(${channelId},${rc.id},'${esc(rc.tvg_name)}')">
-        ${rc.tvg_logo ? `<img src="${esc(rc.tvg_logo)}" onerror="this.src=''" />` : '<div style="width:32px;height:32px;background:var(--bg2);border-radius:4px"></div>'}
+      <div class="picker-item" onclick="App.addSource(${channelId},${rc.id},'${escAttr(channelName)}')">
+        ${rc.tvg_logo ? `<img src="${esc(rc.tvg_logo)}" onerror="this.style.visibility='hidden'" />` : '<div class="picker-noimg"></div>'}
         <span>${esc(rc.tvg_name)}</span>
         <span class="badge-group">${esc(rc.group_title || '')}</span>
       </div>
-    `).join('') || '<p style="color:var(--text2)">Sin resultados</p>';
+    `).join('') || '<p class="modal-hint">Sin resultados para esa búsqueda</p>';
   },
 
-  async addSource(channelId, rawId, name) {
-    await api('POST', `/channels/${channelId}/sources`, { raw_channel_id: rawId });
-    await this.openSources(channelId, name);
+  async addSource(channelId, rawId, channelName) {
+    try {
+      await api('POST', `/channels/${channelId}/sources`, { raw_channel_id: rawId });
+      toast('Fuente añadida', 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+    this.openSources(channelId, channelName);
   },
 
   // ── Rows ───────────────────────────────────────────────────────────────────
   async loadRows() {
     const rows = await api('GET', '/rows');
-    this._rows = rows;
     const el = $('rows-list');
-    if (!rows.length) { el.innerHTML = '<p class="empty-state">No hay filas.</p>'; return; }
     const sections = await Promise.all(rows.map(async r => {
       const chs = await api('GET', `/rows/${r.id}/channels`);
       return { row: r, channels: chs };
     }));
     el.innerHTML = sections.map(({ row, channels }) => `
-      <div class="card" style="flex-direction:column;align-items:flex-start">
-        <div style="display:flex;align-items:center;width:100%;gap:1rem">
+      <div class="card row-card">
+        <div class="row-card-head">
           <div class="card-body">
-            <div class="card-title">${esc(row.name)}</div>
-            <div class="card-subtitle">Fila ${row.enabled ? '<span class="badge badge-ok">visible</span>' : '<span class="badge badge-idle">oculta</span>'}</div>
+            <div class="card-title">${esc(row.name)}
+              ${row.enabled ? '<span class="badge badge-ok">visible</span>' : '<span class="badge badge-idle">oculta</span>'}
+            </div>
           </div>
           <div class="card-actions">
-            <button class="btn btn-sm" onclick="App.toggleRow(${row.id},${row.enabled})">
-              ${row.enabled ? 'Ocultar' : 'Mostrar'}
-            </button>
-            <button class="btn btn-sm" onclick="App.openAddToRow(${row.id},'${esc(row.name)}')">+ Canal</button>
+            <button class="btn-ghost btn-sm" onclick="App.toggleRow(${row.id},${row.enabled})">${row.enabled ? 'Ocultar' : 'Mostrar'}</button>
+            <button class="btn btn-sm" onclick="App.openAddToRow(${row.id},'${escAttr(row.name)}')">+ Canal</button>
           </div>
         </div>
         <div class="row-channels">
@@ -293,9 +410,9 @@ const App = {
             <div class="row-ch-chip">
               ${c.logo_url ? `<img src="${esc(c.logo_url)}" onerror="this.style.display='none'" />` : ''}
               ${esc(c.name)}
-              <button onclick="App.removeFromRow(${row.id},${c.id})" title="Quitar">×</button>
+              <button onclick="App.removeFromRow(${row.id},${c.id})" title="Quitar de la fila">×</button>
             </div>
-          `).join('') || '<span style="color:var(--text2);font-size:.82rem">Sin canales</span>'}
+          `).join('') || '<span class="row-empty">Vacía — pulsa "+ Canal" para añadir</span>'}
         </div>
       </div>
     `).join('');
@@ -313,21 +430,28 @@ const App = {
 
   async openAddToRow(rowId, rowName) {
     const channels = await api('GET', '/channels');
+    if (!channels.length) {
+      toast('Primero crea canales en la pestaña Canales', 'err');
+      return;
+    }
     openModal(`
-      <h3>Añadir canal a fila "${esc(rowName)}"</h3>
+      <h3>Añadir canal a "${esc(rowName)}"</h3>
       <div class="picker-list" style="max-height:360px">
         ${channels.map(c => `
           <div class="picker-item" onclick="App.addToRow(${rowId},${c.id})">
-            ${c.logo_url ? `<img src="${esc(c.logo_url)}" onerror="this.src=''" />` : '<div style="width:32px;height:32px;background:var(--bg2);border-radius:4px"></div>'}
+            ${c.logo_url ? `<img src="${esc(c.logo_url)}" onerror="this.style.visibility='hidden'" />` : '<div class="picker-noimg"></div>'}
             <span>${esc(c.name)}</span>
           </div>
-        `).join('') || '<p style="color:var(--text2)">No hay canales lógicos aún.</p>'}
+        `).join('')}
       </div>
     `);
   },
 
   async addToRow(rowId, chId) {
-    await api('POST', `/rows/${rowId}/channels`, { logical_channel_id: chId }).catch(() => {});
+    try {
+      await api('POST', `/rows/${rowId}/channels`, { logical_channel_id: chId });
+      toast('Canal añadido a la fila', 'ok');
+    } catch { toast('Ese canal ya estaba en la fila', 'err'); }
     closeModal();
     this.loadRows();
   },
@@ -342,17 +466,17 @@ const App = {
         <div class="card-body">
           <div class="card-title">${esc(s.name)}</div>
           <div class="card-subtitle">${esc(s.url)}</div>
-          <div style="margin-top:.3rem">
+          <div style="margin-top:.35rem">
             ${s.last_status?.startsWith('OK')
-              ? `<span class="badge badge-ok">${esc(s.last_status)}</span>`
+              ? `<span class="badge badge-ok">✓ ${esc(s.last_status.slice(3))}</span>`
               : s.last_status
-                ? `<span class="badge badge-err">${esc(s.last_status)}</span>`
-                : '<span class="badge badge-idle">Sin refrescar</span>'}
-            ${s.last_fetched_at ? `<span style="color:var(--text2);font-size:.78rem;margin-left:.5rem">${relTime(s.last_fetched_at)}</span>` : ''}
+                ? `<span class="badge badge-err" title="${esc(s.last_status)}">✕ ${esc(s.last_status.slice(0, 90))}</span>`
+                : '<span class="badge badge-idle">Pendiente de refrescar</span>'}
+            ${s.last_fetched_at ? `<span class="time-ago">${relTime(s.last_fetched_at)}</span>` : ''}
           </div>
         </div>
         <div class="card-actions">
-          <button class="btn btn-sm" onclick="App.refreshEpg(${s.id})">↻ Refrescar</button>
+          <button class="btn btn-sm" onclick="App.refreshEpg(${s.id}, this)">↻ Refrescar</button>
           <button class="btn btn-sm btn-danger" onclick="App.deleteEpg(${s.id})">✕</button>
         </div>
       </div>
@@ -376,19 +500,23 @@ const App = {
   async addEpg() {
     const name = $('epg-name').value.trim();
     const url  = $('epg-url').value.trim();
-    if (!name || !url) return alert('Rellena todos los campos');
-    await api('POST', '/epg-sources', { name, url });
-    closeModal();
-    this.loadEpg();
+    if (!name || !url) return toast('Rellena nombre y URL', 'err');
+    try {
+      await api('POST', '/epg-sources', { name, url });
+      closeModal();
+      toast('Fuente EPG añadida — pulsa ↻ Refrescar para cargarla', 'ok');
+      this.loadEpg();
+    } catch (err) { toast(err.message, 'err'); }
   },
 
-  async refreshEpg(id) {
-    const btn = event.target; btn.textContent = '…'; btn.disabled = true;
+  async refreshEpg(id, btn) {
+    const orig = btn.textContent;
+    btn.textContent = 'Cargando…'; btn.disabled = true;
     try {
       const r = await api('POST', `/epg-sources/${id}/refresh`);
-      alert(`EPG actualizado: ${r.count} programas`);
-    } catch (err) { alert(err.message); }
-    btn.textContent = '↻ Refrescar'; btn.disabled = false;
+      toast(`Guía cargada: ${r.count.toLocaleString('es')} programas`, 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+    btn.textContent = orig; btn.disabled = false;
     this.loadEpg();
   },
 
@@ -410,18 +538,86 @@ const App = {
         <span class="badge ${m.auto_matched ? 'badge-idle' : 'badge-ok'}" style="font-size:.72rem">${m.auto_matched ? 'auto' : 'manual'}</span>
         <button class="btn btn-sm btn-danger" onclick="App.removeEpgMap(${m.logical_channel_id})">✕</button>
       </div>
-    `).join('') : '<p class="empty-state">Sin mapeos. Usa "Auto-emparejar" o mapea manualmente.</p>';
+    `).join('') : '<p class="empty-state">Ningún canal emparejado con la guía todavía.<br>Pulsa <b>⚡ Auto-emparejar</b> (busca por nombre) o <b>Mapear a mano</b>.</p>';
   },
 
   async autoMatchEpg() {
-    const r = await api('POST', '/epg-map/auto-match');
-    alert(`Auto-emparejados: ${r.matched} canales`);
+    try {
+      const r = await api('POST', '/epg-map/auto-match');
+      toast(r.matched > 0
+        ? `${r.matched} canal(es) emparejados con la guía`
+        : 'Ningún emparejamiento automático — prueba "Mapear a mano"', r.matched > 0 ? 'ok' : 'err');
+    } catch (err) { toast(err.message, 'err'); }
     this.loadEpgMap();
+  },
+
+  async openManualMap() {
+    const channels = await api('GET', '/channels');
+    if (!channels.length) return toast('Primero crea canales en la pestaña Canales', 'err');
+    openModal(`
+      <h3>Mapear canal a la guía</h3>
+      <div class="form-group">
+        <label>1. Elige tu canal</label>
+        <select id="map-channel">${channels.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('')}</select>
+      </div>
+      <div class="form-group">
+        <label>2. Busca el canal en la guía EPG</label>
+        <input id="map-q" placeholder="🔍 Ej: laliga" oninput="App.searchEpgChannels(this.value)" />
+      </div>
+      <div class="picker-list" id="map-results"></div>
+    `);
+    $('map-q').focus();
+  },
+
+  async searchEpgChannels(q) {
+    if (q.length < 2) { $('map-results').innerHTML = ''; return; }
+    const results = await api('GET', `/epg-channels?search=${encodeURIComponent(q)}&limit=30`);
+    $('map-results').innerHTML = results.map(ec => `
+      <div class="picker-item" onclick="App.saveManualMap(${ec.epg_source_id},'${escAttr(ec.channel_id)}')">
+        ${ec.icon ? `<img src="${esc(ec.icon)}" onerror="this.style.visibility='hidden'" />` : '<div class="picker-noimg"></div>'}
+        <span>${esc(ec.display_name)}</span>
+      </div>
+    `).join('') || '<p class="modal-hint">Sin resultados</p>';
+  },
+
+  async saveManualMap(epgSourceId, epgChannelId) {
+    const logicalId = Number($('map-channel').value);
+    try {
+      await api('POST', '/epg-map', {
+        logical_channel_id: logicalId,
+        epg_source_id: epgSourceId,
+        epg_channel_id: epgChannelId,
+      });
+      toast('Canal mapeado a la guía', 'ok');
+      closeModal();
+      this.loadEpgMap();
+    } catch (err) { toast(err.message, 'err'); }
   },
 
   async removeEpgMap(lcId) {
     await api('DELETE', `/epg-map/${lcId}`);
     this.loadEpgMap();
+  },
+
+  // ── Logs ───────────────────────────────────────────────────────────────────
+  startLogs() {
+    this.loadLogs();
+    this._logsTimer = setInterval(() => {
+      if ($('logs-auto')?.checked && !$('tab-logs').classList.contains('hidden')) this.loadLogs();
+    }, 4000);
+  },
+
+  async loadLogs() {
+    const logs = await api('GET', '/logs?limit=200');
+    const el = $('logs-list');
+    if (!el) return;
+    el.innerHTML = logs.length ? logs.map(l => `
+      <div class="log-line log-${l.level}">
+        <span class="log-ts">${new Date(l.ts).toLocaleTimeString('es-ES')}</span>
+        <span class="log-level">${l.level.toUpperCase()}</span>
+        <span class="log-msg">${esc(l.msg)}</span>
+      </div>
+    `).join('') : '<p class="empty-state">Sin actividad todavía.</p>';
   },
 
   // ── Settings ───────────────────────────────────────────────────────────────
@@ -432,18 +628,14 @@ const App = {
       const inp = form.querySelector(`[name="${k}"]`);
       if (inp) inp.value = v;
     }
-    if (s.addon_token) {
-      $('manifest-url').value = `${location.origin}/${s.addon_token}/manifest.json`;
-    }
     this.loadStatus();
   },
 
   async saveSettings(e) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
-    delete data.manifest_url;
     await api('POST', '/settings', data);
-    alert('Ajustes guardados');
+    toast('Ajustes guardados', 'ok');
     this.loadSettings();
   },
 
@@ -452,7 +644,14 @@ const App = {
     $('status-panel').innerHTML = `
       <h3 style="margin-bottom:1rem">Estado</h3>
       <div class="status-grid">
-        ${Object.entries({ Playlists: s.playlists, 'Canales raw': s.raw_channels, 'Canales lógicos': s.logical_channels, 'Fuentes EPG': s.epg_sources, Programas: s.programmes, 'EPG mapeados': s.epg_mapped }).map(([k, v]) => `
+        ${Object.entries({
+          'Playlists': s.playlists,
+          'Canales IPTV': s.raw_channels,
+          'Canales creados': s.logical_channels,
+          'En filas': s.channels_in_rows,
+          'Programas EPG': s.programmes.toLocaleString('es'),
+          'Con guía': s.epg_mapped,
+        }).map(([k, v]) => `
           <div class="stat-card"><div class="stat-value">${v}</div><div class="stat-label">${k}</div></div>
         `).join('')}
       </div>
@@ -463,6 +662,11 @@ const App = {
 // ── Utils ─────────────────────────────────────────────────────────────────────
 function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// for use inside single-quoted JS strings in inline handlers
+function escAttr(s) {
+  return esc(s).replace(/\\/g, '\\\\');
 }
 
 function relTime(epochSec) {
