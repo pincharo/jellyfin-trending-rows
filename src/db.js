@@ -112,6 +112,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS prog_source ON programmes(epg_source_id);
 `);
 
+// Unique index prevents duplicate programmes (dobleM XML repeats entries).
+// Existing DBs may already hold duplicates — dedupe first, then create the index.
+try {
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS prog_unique ON programmes(epg_source_id, epg_channel_id, start)');
+} catch {
+  db.exec(`DELETE FROM programmes WHERE id NOT IN (
+    SELECT MIN(id) FROM programmes GROUP BY epg_source_id, epg_channel_id, start
+  )`);
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS prog_unique ON programmes(epg_source_id, epg_channel_id, start)');
+}
+
 // seed default rows if missing
 const rowCount = db.prepare('SELECT COUNT(*) as c FROM rows').get().c;
 if (rowCount === 0) {

@@ -1,7 +1,7 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import db from './db.js';
 import { PORT, BASE_URL, ADDON_TOKEN, DEFAULT_EPG_URL } from './config.js';
 import addonRouter from './routes/addon.js';
@@ -42,7 +42,7 @@ app.use('/api/admin', adminApiRouter);
 app.use('/:token', addonRouter);
 
 // ── Seed default EPG source if none exists ─────────────────────────────────────
-function seedDefaults() {
+export function seedDefaults() {
   const epgCount = db.prepare('SELECT COUNT(*) as c FROM epg_sources').get().c;
   if (epgCount === 0) {
     db.prepare("INSERT INTO epg_sources(name,url) VALUES('EPG dobleM',?)")
@@ -66,10 +66,15 @@ function generateToken() {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
-// ── Start ──────────────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`Servidor arriba en http://localhost:${PORT}`);
-  console.log(`Panel admin: http://localhost:${PORT}/admin`);
-  seedDefaults();
-  startScheduler();
-});
+export { app };
+
+// ── Start (only when run directly, not when imported by tests) ─────────────────
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  app.listen(PORT, () => {
+    console.log(`Servidor arriba en http://localhost:${PORT}`);
+    console.log(`Panel admin: http://localhost:${PORT}/admin`);
+    seedDefaults();
+    startScheduler();
+  });
+}

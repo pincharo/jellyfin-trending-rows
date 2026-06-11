@@ -42,7 +42,7 @@ export async function refreshEpgSource(sourceId) {
 
   const flushProgs = db.transaction(batch => {
     const ins = db.prepare(`
-      INSERT OR REPLACE INTO programmes
+      INSERT OR IGNORE INTO programmes
         (epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories)
       VALUES (?,?,?,?,?,?,?,?)
     `);

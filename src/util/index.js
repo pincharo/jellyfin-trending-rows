@@ -70,3 +70,12 @@ export function extractSubtitleCategories(subtitle) {
   if (!m) return [];
   return m[1].split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 }
+
+// Strips Kodi formatting tags ([COLOR x]...[/COLOR], [B], [I]) used by dobleM guides
+export function stripKodiTags(text) {
+  return String(text || '')
+    .replace(/\[\/?COLOR[^\]]*\]/gi, '')
+    .replace(/\[\/?[BI]\]/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
