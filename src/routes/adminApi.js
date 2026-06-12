@@ -207,6 +207,7 @@ router.get('/rows/:id/preview', (req, res) => {
       id: c.id,
       slug: c.slug,
       name: m?.name || c.name,
+      channel_name: c.name,
       poster,
       fallback: generated,
       enabled: !!c.enabled,

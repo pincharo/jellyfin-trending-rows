@@ -785,7 +785,7 @@ const App = {
                   <div class="rp-tools">
                     <button class="rp-tool" onclick="App.moveInRow(${row.id},${ci},-1)" ${ci === 0 ? 'disabled' : ''} title="Mover a la izquierda">${ICONS.left}</button>
                     <button class="rp-tool" onclick="App.toggleChannelEnabled(${c.id},${c.enabled ? 0 : 1})" title="${c.enabled ? 'Ocultar canal en el addon' : 'Mostrar canal en el addon'}">${c.enabled ? ICONS.eyeOff : ICONS.eye}</button>
-                    <button class="rp-tool" onclick="App.openRowChannelCustom(${row.id},${c.id},'${escAttr(c.custom_poster||'')}','${escAttr(c.custom_name||'')}','${escAttr(c.name)}')" title="Personalizar en esta fila">${ICONS.pencil}</button>
+                    <button class="rp-tool" onclick="App.openRowChannelCustom(${row.id},${c.id},'${escAttr(c.custom_poster||'')}','${escAttr(c.custom_name||'')}','${escAttr(c.channel_name||c.name)}')" title="Personalizar en esta fila">${ICONS.pencil}</button>
                     <button class="rp-tool" onclick="App.moveInRow(${row.id},${ci},1)" ${ci === channels.length - 1 ? 'disabled' : ''} title="Mover a la derecha">${ICONS.right}</button>
                     <button class="rp-tool rp-tool-danger" onclick="App.removeFromRow(${row.id},${c.id})" title="Quitar de la fila">${ICONS.x}</button>
                   </div>
@@ -918,14 +918,14 @@ const App = {
   openRowChannelCustom(rowId, chId, customPoster, customName, channelName) {
     openModal(`
       <h3>Personalizar canal en esta fila</h3>
-      <p class="hint" style="margin-bottom:1rem">Estos valores solo afectan a <b>${esc(channelName)}</b> <em>dentro de esta fila</em>. El canal sigue igual en las demás filas.</p>
+      <p class="hint" style="margin-bottom:1rem">Estos valores solo afectan a <b>${esc(channelName)}</b> <em>dentro de esta fila</em> y son <b>fijos</b>: no cambian con la programación del EPG. El canal sigue igual en las demás filas.</p>
       <div class="form-group">
         <label>Poster custom para esta fila (URL)</label>
-        <input id="rc-poster" value="${esc(customPoster)}" placeholder="https://… (vacío = usa el de la fila)" />
+        <input id="rc-poster" value="${esc(customPoster)}" placeholder="https://… (vacío = según el modo de la fila)" />
       </div>
       <div class="form-group">
         <label>Nombre custom para esta fila</label>
-        <input id="rc-name" value="${esc(customName)}" placeholder="${esc(channelName)} (vacío = usa el predeterminado)" />
+        <input id="rc-name" value="${esc(customName)}" placeholder="${esc(channelName)} (vacío = según el modo de la fila)" />
       </div>
       <div class="form-actions">
         <button class="btn-ghost" onclick="App.clearRowChannelCustom(${rowId},${chId})">Limpiar</button>
