@@ -83,6 +83,9 @@ function closeModal() { $('modal-overlay').classList.add('hidden'); }
 const App = {
   _channels: [],
   _logsTimer: null,
+  _debounceTimer: null,
+  _selectedEpg: null,
+  _sourcesAddedIds: new Set(),
 
   switchTab(tab) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
@@ -302,15 +305,70 @@ const App = {
   },
 
   openAddChannel() {
+    App._selectedEpg = null;
     openModal(`
       <h3>Nuevo canal lógico</h3>
-      <div class="form-group"><label>Nombre del canal (como quieres verlo en Stremio)</label><input id="ch-name" placeholder="M+ LaLiga" /></div>
-      <div class="form-group"><label>Logo URL (opcional — si lo dejas vacío se usará el del EPG)</label><input id="ch-logo" placeholder="https://…" /></div>
+      <div class="form-group">
+        <label>Nombre del canal (como quieres verlo en Stremio)</label>
+        <input id="ch-name" placeholder="M+ LaLiga" />
+      </div>
+      <div class="form-group">
+        <label>Logo URL (opcional — si lo dejas vacío se usará el del EPG)</label>
+        <input id="ch-logo" placeholder="https://…" />
+      </div>
+      <div class="form-group">
+        <label>Guía EPG (opcional) — da descripción "Ahora:" en Stremio</label>
+        <input id="ch-epg-q" placeholder="🔍 Buscar canal en la guía EPG…" oninput="App.searchEpgForChannel(this.value)" autocomplete="off" />
+        <div class="picker-list" id="ch-epg-results" style="margin-top:.4rem;max-height:180px"></div>
+        <div id="ch-epg-selected" class="hidden" style="margin-top:.4rem"></div>
+      </div>
       <div class="form-actions">
         <button class="btn-ghost" onclick="App.closeModal()">Cancelar</button>
         <button class="btn" onclick="App.addChannel()">Crear</button>
       </div>
     `);
+    $('ch-name').focus();
+  },
+
+  async searchEpgForChannel(q) {
+    clearTimeout(this._debounceTimer);
+    this._debounceTimer = setTimeout(async () => {
+      const el = $('ch-epg-results');
+      if (!el) return;
+      if (!q.trim()) { el.innerHTML = ''; return; }
+      const results = await api('GET', `/epg-channels?search=${encodeURIComponent(q)}&limit=20`);
+      el.innerHTML = results.map(ec => `
+        <div class="picker-item" onclick="App.selectEpgForChannel(${ec.epg_source_id},'${escAttr(ec.channel_id)}','${escAttr(ec.display_name)}','${escAttr(ec.icon || '')}')">
+          ${ec.icon ? `<img src="${esc(ec.icon)}" onerror="this.style.visibility='hidden'" />` : '<div class="picker-noimg"></div>'}
+          <span>${esc(ec.display_name)}</span>
+        </div>
+      `).join('') || '<p class="modal-hint" style="padding:.4rem 0">Sin resultados en la guía EPG</p>';
+    }, 300);
+  },
+
+  selectEpgForChannel(epgSourceId, epgChannelId, displayName, icon) {
+    App._selectedEpg = { epgSourceId, epgChannelId };
+    const res = $('ch-epg-results');
+    if (res) res.innerHTML = '';
+    const q = $('ch-epg-q');
+    if (q) q.value = '';
+    const sel = $('ch-epg-selected');
+    if (!sel) return;
+    sel.innerHTML = `
+      <div class="picker-item epg-chosen">
+        ${icon ? `<img src="${esc(icon)}" onerror="this.style.visibility='hidden'" />` : '<div class="picker-noimg"></div>'}
+        <span style="flex:1">${esc(displayName)}</span>
+        <span class="badge badge-ok" style="flex-shrink:0">✓ EPG vinculada</span>
+        <button class="btn-ghost btn-sm" onclick="App.clearEpgForChannel()" style="flex-shrink:0">✕</button>
+      </div>
+    `;
+    sel.classList.remove('hidden');
+  },
+
+  clearEpgForChannel() {
+    App._selectedEpg = null;
+    const sel = $('ch-epg-selected');
+    if (sel) { sel.innerHTML = ''; sel.classList.add('hidden'); }
   },
 
   async addChannel() {
@@ -319,6 +377,13 @@ const App = {
     if (!name) return toast('Introduce un nombre', 'err');
     try {
       const r = await api('POST', '/channels', { name, logo_url: logo });
+      if (App._selectedEpg) {
+        await api('POST', '/epg-map', {
+          logical_channel_id: r.id,
+          epg_source_id: App._selectedEpg.epgSourceId,
+          epg_channel_id: App._selectedEpg.epgChannelId,
+        }).catch(() => {});
+      }
       closeModal();
       toast('Canal creado — ahora añádele fuentes', 'ok');
       await this.loadChannels();
@@ -335,53 +400,101 @@ const App = {
 
   async openSources(channelId, channelName) {
     const sources = await api('GET', `/channels/${channelId}/sources`);
+    App._sourcesAddedIds = new Set(sources.map(s => s.raw_id));
     openModal(`
       <h3>Fuentes de "${esc(channelName)}"</h3>
-      <p class="modal-hint">Cada fuente es un canal de tu IPTV. En Stremio aparecerán como "Fuente 1", "Fuente 2"… por orden.</p>
+      <p class="modal-hint">Cada fuente es un canal de tu IPTV. En Stremio aparecerán como "Fuente 1", "Fuente 2"… por orden de prioridad.</p>
       <div class="sources-list" id="sources-list">
-        ${sources.length ? sources.map((s, i) => `
-          <div class="source-item" id="src-${s.id}">
-            <span class="source-num">${i + 1}</span>
-            ${s.tvg_logo ? `<img src="${esc(s.tvg_logo)}" style="width:28px;height:28px;border-radius:4px;object-fit:cover">` : ''}
-            <span class="source-name">${esc(s.tvg_name)}</span>
-            <button class="btn btn-sm btn-danger" onclick="App.removeSource(${channelId},${s.id},'${escAttr(channelName)}')">✕</button>
-          </div>
-        `).join('') : '<p class="modal-hint">Sin fuentes todavía. Busca abajo entre los canales de tu IPTV.</p>'}
+        ${this._renderSourceItems(sources, channelId, channelName)}
       </div>
-      <div style="margin-top:1rem">
-        <input class="picker-search" id="picker-q" placeholder="🔍 Buscar en tu lista IPTV (ej: laliga)…" oninput="App.searchRaw(this.value,${channelId},'${escAttr(channelName)}')" />
+      <div style="margin-top:1.1rem">
+        <input class="picker-search" id="picker-q" placeholder="🔍 Buscar en tu IPTV… (ej: laliga, movistar, bein)" oninput="App.searchRaw(this.value,${channelId},'${escAttr(channelName)}')" autocomplete="off" />
+        <div id="picker-hint" class="modal-hint" style="margin:.3rem 0 .2rem"></div>
         <div class="picker-list" id="picker-list"></div>
       </div>
     `);
     const q = $('picker-q');
-    if (q) q.focus();
+    if (q) {
+      q.focus();
+      this._doSearchRaw('', channelId, channelName);
+    }
+  },
+
+  _renderSourceItems(sources, channelId, channelName) {
+    if (!sources.length) return '<p class="modal-hint">Sin fuentes todavía. Busca abajo y haz clic para añadir.</p>';
+    return sources.map((s, i) => `
+      <div class="source-item" id="src-${s.id}">
+        <span class="source-num">${i + 1}</span>
+        ${s.tvg_logo ? `<img src="${esc(s.tvg_logo)}" style="width:30px;height:30px;border-radius:5px;object-fit:contain;background:#fff1">` : '<div style="width:30px;height:30px;border-radius:5px;background:var(--bg3);flex-shrink:0"></div>'}
+        <div class="source-info">
+          <span class="source-name">${esc(s.tvg_name)}</span>
+          ${s.group_title ? `<span class="source-group">${esc(s.group_title)}</span>` : ''}
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="App.removeSource(${channelId},${s.id},'${escAttr(channelName)}')">✕</button>
+      </div>
+    `).join('');
+  },
+
+  async _refreshSourcesList(channelId, channelName) {
+    const sources = await api('GET', `/channels/${channelId}/sources`);
+    App._sourcesAddedIds = new Set(sources.map(s => s.raw_id));
+    const el = $('sources-list');
+    if (el) el.innerHTML = this._renderSourceItems(sources, channelId, channelName);
   },
 
   async removeSource(channelId, srcId, channelName) {
     await api('DELETE', `/channels/${channelId}/sources/${srcId}`);
-    this.openSources(channelId, channelName);
+    await this._refreshSourcesList(channelId, channelName);
+    const q = $('picker-q')?.value ?? '';
+    this._doSearchRaw(q, channelId, channelName);
   },
 
-  async searchRaw(q, channelId, channelName) {
-    if (q.length < 2) { $('picker-list').innerHTML = ''; return; }
-    const results = await api('GET', `/raw-channels?search=${encodeURIComponent(q)}&limit=40`);
+  searchRaw(q, channelId, channelName) {
+    clearTimeout(this._debounceTimer);
+    const delay = q.length === 0 ? 0 : 300;
+    this._debounceTimer = setTimeout(() => this._doSearchRaw(q, channelId, channelName), delay);
+  },
+
+  async _doSearchRaw(q, channelId, channelName) {
+    const limit = q.length === 0 ? 40 : 60;
+    const results = await api('GET', `/raw-channels?search=${encodeURIComponent(q)}&limit=${limit}`);
     const el = $('picker-list');
     if (!el) return;
-    el.innerHTML = results.map(rc => `
-      <div class="picker-item" onclick="App.addSource(${channelId},${rc.id},'${escAttr(channelName)}')">
-        ${rc.tvg_logo ? `<img src="${esc(rc.tvg_logo)}" onerror="this.style.visibility='hidden'" />` : '<div class="picker-noimg"></div>'}
-        <span>${esc(rc.tvg_name)}</span>
-        <span class="badge-group">${esc(rc.group_title || '')}</span>
-      </div>
-    `).join('') || '<p class="modal-hint">Sin resultados para esa búsqueda</p>';
+    const hint = $('picker-hint');
+    if (hint) {
+      hint.textContent = q
+        ? `${results.length} resultado(s) para "${q}"`
+        : `${results.length} canales — escribe para filtrar`;
+    }
+    const addedIds = App._sourcesAddedIds;
+    if (!results.length) {
+      el.innerHTML = '<p class="modal-hint">Sin resultados para esa búsqueda</p>';
+      return;
+    }
+    el.innerHTML = results.map(rc => {
+      const added = addedIds.has(rc.id);
+      return `
+        <div class="picker-item${added ? ' picker-item-added' : ''}"
+          ${!added ? `onclick="App.addSource(${channelId},${rc.id},'${escAttr(channelName)}')"` : ''}>
+          ${rc.tvg_logo ? `<img src="${esc(rc.tvg_logo)}" onerror="this.style.visibility='hidden'" />` : '<div class="picker-noimg"></div>'}
+          <div class="picker-item-body">
+            <span class="picker-item-name">${esc(rc.tvg_name)}</span>
+            ${rc.group_title ? `<span class="picker-group-pill">${esc(rc.group_title)}</span>` : ''}
+          </div>
+          ${added ? '<span class="picker-check">✓ añadida</span>' : '<span class="picker-add-hint">+ añadir</span>'}
+        </div>
+      `;
+    }).join('');
   },
 
   async addSource(channelId, rawId, channelName) {
     try {
       await api('POST', `/channels/${channelId}/sources`, { raw_channel_id: rawId });
       toast('Fuente añadida', 'ok');
+      await this._refreshSourcesList(channelId, channelName);
+      const q = $('picker-q')?.value ?? '';
+      this._doSearchRaw(q, channelId, channelName);
     } catch (err) { toast(err.message, 'err'); }
-    this.openSources(channelId, channelName);
   },
 
   // ── Rows ───────────────────────────────────────────────────────────────────
