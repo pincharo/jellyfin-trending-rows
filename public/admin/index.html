@@ -114,6 +114,24 @@
           <label>Refresco automático de EPG (horas) <input name="epg_refresh_hours" type="number" min="1" placeholder="12" /></label>
           <button type="submit" class="btn">Guardar</button>
         </form>
+
+        <div class="settings-section" style="margin-top:1.8rem">
+          <h3 style="margin-bottom:.5rem;font-size:1rem">Orientación de pósters</h3>
+          <p class="hint">Controla cómo se muestran los canales en Stremio/Nuvio y qué guía EPG de dobleM se usa. Cambiarlo actualiza también la URL del EPG dobleM — pulsa <b>↻ Refrescar</b> en EPG tras el cambio.</p>
+          <div class="orientation-btns" id="orientation-btns">
+            <button class="orient-btn" data-orient="landscape" onclick="App.switchOrientation('landscape')">
+              <span class="orient-icon">▬</span>
+              <span class="orient-label">Horizontal <b>(16:9)</b></span>
+              <span class="orient-hint">Fanart de partidos · guiafanart_color.xml.gz</span>
+            </button>
+            <button class="orient-btn" data-orient="portrait" onclick="App.switchOrientation('portrait')">
+              <span class="orient-icon">▮</span>
+              <span class="orient-label">Vertical <b>(2:3)</b></span>
+              <span class="orient-hint">Carátulas TV clásicas · guiatv_color.xml.gz</span>
+            </button>
+          </div>
+        </div>
+
         <div id="status-panel" style="margin-top:2rem"></div>
       </section>
     </main>

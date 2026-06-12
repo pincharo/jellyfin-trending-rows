@@ -26,11 +26,12 @@ app.get('/placeholder.png', (req, res) => {
   res.send('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#1a1a2e"/><text x="40" y="48" font-size="28" text-anchor="middle" fill="#4a9eff">TV</text></svg>');
 });
 
-// ── Generated channel posters (landscape fallback, no token: leaks nothing) ──
+// ── Generated channel posters (no token: posters contain no private data) ──
 app.get('/poster/channel/:file', async (req, res) => {
   const slug = req.params.file.replace(/\.webp$/, '');
   try {
-    const buf = await (await import('./services/poster.js')).channelPoster(slug);
+    const orientation = db.prepare("SELECT value FROM settings WHERE key='poster_orientation'").get()?.value || 'landscape';
+    const buf = await (await import('./services/poster.js')).channelPoster(slug, orientation);
     if (!buf) return res.status(404).end();
     res.set('Content-Type', 'image/webp');
     res.set('Cache-Control', 'public, max-age=3600');

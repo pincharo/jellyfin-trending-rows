@@ -8,6 +8,13 @@ export const ADDON_TOKEN = process.env.ADDON_TOKEN || '';
 export const COOKIE_SECRET = process.env.COOKIE_SECRET || randomBytes(32).toString('hex');
 
 export const DEFAULT_EPG_URL = 'https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiafanart_color.xml.gz';
+export const DEFAULT_EPG_URL_PORTRAIT = 'https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiatv_color.xml.gz';
+
+// Known dobleM EPG URLs indexed by orientation, for the auto-swap in settings
+export const DOBLEM_EPG_URLS = {
+  landscape: DEFAULT_EPG_URL,
+  portrait:  DEFAULT_EPG_URL_PORTRAIT,
+};
 
 export const DEFAULT_ROWS = [
   { slug: 'canales',    name: 'Canales',    sort_order: 0 },

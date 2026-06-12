@@ -275,6 +275,20 @@ input:focus, select:focus { border-color: var(--accent); }
 .log-error .log-level { color: var(--danger); }
 .log-msg { word-break: break-word; }
 
+/* ── Orientation picker ── */
+.orientation-btns { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: .6rem; }
+.orient-btn {
+  flex: 1; min-width: 200px; display: flex; flex-direction: column; align-items: flex-start; gap: .3rem;
+  background: var(--bg2); border: 2px solid var(--border); border-radius: var(--radius);
+  padding: .9rem 1.1rem; cursor: pointer; text-align: left; transition: border-color .15s;
+  color: var(--text);
+}
+.orient-btn:hover { border-color: var(--accent); }
+.orient-btn.orient-active { border-color: var(--accent); background: var(--accent-soft); }
+.orient-icon { font-size: 1.4rem; line-height: 1; }
+.orient-label { font-size: .9rem; font-weight: 600; }
+.orient-hint { font-size: .74rem; color: var(--text2); font-family: ui-monospace, monospace; }
+
 /* ── Status panel ── */
 .status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: .75rem; }
 .stat-card { background: var(--bg2); border-radius: var(--radius); padding: .9rem 1rem; border: 1px solid var(--border); }

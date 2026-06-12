@@ -4,6 +4,7 @@ import { login, logout, requireAuth } from '../auth.js';
 import { refreshPlaylist } from '../services/playlistRefresh.js';
 import { refreshEpgSource, autoMatchEpg } from '../services/epgRefresh.js';
 import { channelsForRow } from '../services/catalog.js';
+import { DOBLEM_EPG_URLS } from '../config.js';
 import { slugify, sha1hex } from '../util/index.js';
 import { getLogs } from '../util/logger.js';
 import { reschedule } from '../services/scheduler.js';
@@ -277,7 +278,7 @@ router.get('/settings', (req, res) => {
 });
 
 router.post('/settings', (req, res) => {
-  const allowed = ['playlist_refresh_hours', 'epg_refresh_hours', 'addon_token', 'addon_id', 'timezone'];
+  const allowed = ['playlist_refresh_hours', 'epg_refresh_hours', 'addon_token', 'addon_id', 'timezone', 'poster_orientation'];
   const set = db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)');
   const tx = db.transaction(body => {
     for (const [k, v] of Object.entries(body)) {
@@ -287,6 +288,22 @@ router.post('/settings', (req, res) => {
   tx(req.body);
   reschedule();
   res.json({ ok: true });
+});
+
+// convenience: swap the dobleM EPG source URL and set orientation in one shot
+router.post('/settings/switch-orientation', (req, res) => {
+  const { orientation } = req.body;
+  if (!['landscape', 'portrait'].includes(orientation)) {
+    return res.status(400).json({ error: 'orientation debe ser landscape o portrait' });
+  }
+  const newEpgUrl = DOBLEM_EPG_URLS[orientation];
+  // update setting
+  db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('poster_orientation',?)").run(orientation);
+  // if the dobleM EPG source exists, update its URL to match
+  const known = Object.values(DOBLEM_EPG_URLS);
+  db.prepare(`UPDATE epg_sources SET url=? WHERE url IN (${known.map(() => '?').join(',')})`).run(newEpgUrl, ...known);
+  reschedule();
+  res.json({ ok: true, epg_url: newEpgUrl, orientation });
 });
 
 // ── Status / info ─────────────────────────────────────────────────────────────

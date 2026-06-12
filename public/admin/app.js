@@ -821,7 +821,26 @@ const App = {
       const inp = form.querySelector(`[name="${k}"]`);
       if (inp) inp.value = v;
     }
+    this._updateOrientationUI(s.poster_orientation || 'landscape');
     this.loadStatus();
+  },
+
+  _updateOrientationUI(active) {
+    document.querySelectorAll('.orient-btn').forEach(btn => {
+      btn.classList.toggle('orient-active', btn.dataset.orient === active);
+    });
+  },
+
+  async switchOrientation(orientation) {
+    const btn = document.querySelector(`.orient-btn[data-orient="${orientation}"]`);
+    const orig = btn?.textContent;
+    if (btn) { btn.disabled = true; }
+    try {
+      await api('POST', '/settings/switch-orientation', { orientation });
+      this._updateOrientationUI(orientation);
+      toast(`Orientación cambiada a ${orientation === 'landscape' ? 'horizontal' : 'vertical'}. Pulsa ↻ Refrescar en EPG para aplicar.`, 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+    if (btn) { btn.disabled = false; }
   },
 
   async saveSettings(e) {

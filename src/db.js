@@ -136,6 +136,7 @@ const currentVersion = storedVersion ? Number(storedVersion.value) : 0;
 
 if (currentVersion < 2) {
   try { db.exec("ALTER TABLE programmes ADD COLUMN icon TEXT DEFAULT ''"); } catch {}
+  db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES('poster_orientation','landscape')").run();
   db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('schema_version','2')").run();
 }
 

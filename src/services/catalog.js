@@ -55,25 +55,30 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled =
     LIMIT ? OFFSET ?
   `).all(row.id, limit, skip);
 
+  const posterShape = getPosterShape();
   return channels.map(ch => {
     const map = epgMap(ch.id);
     const desc = buildDescription(ch, map);
     const channelIcon = ch.logo_url || (map ? getEpgChannelIcon(map.epg_channel_id, map.epg_source_id) : '');
     const prog = map ? currentProgramme(map.epg_channel_id, map.epg_source_id) : null;
     const fanart = prog?.icon || '';
-    // generated landscape art keeps every row a uniform shape when there's no fanart
     const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
     return {
       id: `iptv:${ch.slug}`,
       type: 'tv',
       name: prog ? `${prog.title} — ${ch.name}` : ch.name,
       poster: fanart || generated,
-      posterShape: 'landscape',
+      posterShape,
       logo: channelIcon || undefined,
       description: desc,
       background: fanart || generated,
     };
   });
+}
+
+function getPosterShape() {
+  const v = db.prepare("SELECT value FROM settings WHERE key='poster_orientation'").get()?.value;
+  return v === 'portrait' ? 'poster' : 'landscape';
 }
 
 function getEpgChannelIcon(channelId, sourceId) {
@@ -117,7 +122,7 @@ export function channelMeta(slug) {
     type: 'tv',
     name: currentProg ? `${currentProg.title} — ${ch.name}` : ch.name,
     poster: fanart || generated,
-    posterShape: 'landscape',
+    posterShape: getPosterShape(),
     logo: icon || undefined,
     background: fanart || generated,
     description: desc,

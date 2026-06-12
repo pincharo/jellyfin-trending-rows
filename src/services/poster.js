@@ -7,28 +7,14 @@ import { DATA_DIR } from '../config.js';
 import { logWarn } from '../util/logger.js';
 
 const POSTER_DIR = join(DATA_DIR, 'posters');
-const W = 800;
-const H = 450;
 
-function escapeXml(s) {
-  return String(s ?? '').replace(/[<>&"']/g, c => ({
-    '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;',
-  }[c]));
-}
+// landscape = 16:9 for fanart/sports rows; portrait = 2:3 for classic TV grid
+const DIMS = {
+  landscape: { w: 800, h: 450 },
+  portrait:  { w: 400, h: 600 },
+};
 
-function bgSvg(text = '') {
-  return Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
-    <defs>
-      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#10162a"/>
-        <stop offset="1" stop-color="#1d2742"/>
-      </linearGradient>
-    </defs>
-    <rect width="${W}" height="${H}" fill="url(#g)"/>
-    ${text ? `<text x="${W / 2}" y="${H / 2 + 16}" font-size="46" font-family="DejaVu Sans, Arial, sans-serif"
-      font-weight="700" text-anchor="middle" fill="#e6e9f0">${escapeXml(text)}</text>` : ''}
-  </svg>`);
-}
+const BG = { r: 13, g: 17, b: 35, alpha: 1 }; // dark navy — no SVG/librsvg needed
 
 function findChannelLogo(ch) {
   if (ch.logo_url) return ch.logo_url;
@@ -47,19 +33,18 @@ function findChannelLogo(ch) {
 }
 
 /**
- * Landscape (800×450) webp poster for a logical channel: its square logo
- * centered on a dark gradient. Used as fallback when the current programme
- * has no fanart, so catalog rows keep a consistent landscape shape.
- * Cached on disk keyed by (slug, logo url).
+ * Returns a WebP poster for a logical channel, sized for the given orientation.
+ * The square channel logo is composited on a dark background — no SVG/librsvg needed.
+ * Results are disk-cached keyed by (slug, logo url, orientation).
  */
-export async function channelPoster(slug) {
+export async function channelPoster(slug, orientation = 'landscape') {
+  const { w, h } = DIMS[orientation] || DIMS.landscape;
   const ch = db.prepare('SELECT * FROM logical_channels WHERE slug=?').get(slug);
   if (!ch) return null;
 
   const logo = findChannelLogo(ch);
-
   await mkdir(POSTER_DIR, { recursive: true });
-  const cacheFile = join(POSTER_DIR, `ch_${sha1hex(`${slug}|${logo}`).slice(0, 16)}.webp`);
+  const cacheFile = join(POSTER_DIR, `ch_${sha1hex(`${slug}|${logo}|${orientation}`)}.webp`);
   try { return await readFile(cacheFile); } catch {}
 
   let logoBuf = null;
@@ -75,22 +60,33 @@ export async function channelPoster(slug) {
     }
   }
 
-  let composite = null;
+  // Solid-color background via sharp.create — works on all platforms without librsvg
+  const base = sharp({ create: { width: w, height: h, channels: 4, background: BG } });
+
   if (logoBuf) {
     try {
-      composite = await sharp(logoBuf)
-        .resize(Math.round(W * 0.55), Math.round(H * 0.6), { fit: 'inside' })
+      const maxLogoW = Math.round(w * 0.55);
+      const maxLogoH = Math.round(h * 0.6);
+      const logoResized = await sharp(logoBuf)
+        .resize(maxLogoW, maxLogoH, { fit: 'inside', background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .png()
         .toBuffer();
-    } catch {
-      composite = null; // corrupt/unsupported image — fall back to text
+      const { width: lw, height: lh } = await sharp(logoResized).metadata();
+      const left = Math.round((w - lw) / 2);
+      const top  = Math.round((h - lh) / 2);
+      const out = await base
+        .composite([{ input: logoResized, left, top }])
+        .webp({ quality: 82 })
+        .toBuffer();
+      writeFile(cacheFile, out).catch(() => {});
+      return out;
+    } catch (err) {
+      logWarn(`Póster "${slug}": error procesando logo (${err.message}), usando fondo plano`);
     }
   }
 
-  const base = sharp(bgSvg(composite ? '' : ch.name));
-  const img = composite ? base.composite([{ input: composite, gravity: 'centre' }]) : base;
-  const out = await img.webp({ quality: 82 }).toBuffer();
-
+  // Fallback: plain dark background (still beats a broken image)
+  const out = await base.webp({ quality: 82 }).toBuffer();
   writeFile(cacheFile, out).catch(() => {});
   return out;
 }
