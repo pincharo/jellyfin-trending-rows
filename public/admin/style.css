@@ -234,14 +234,14 @@ input:focus, select:focus { border-color: var(--accent); }
   scrollbar-width: thin; scrollbar-color: var(--border) transparent;
 }
 .row-preview-card {
-  flex-shrink: 0; width: 110px; position: relative; scroll-snap-align: start;
+  flex-shrink: 0; width: 168px; position: relative; scroll-snap-align: start;
   cursor: default;
 }
 .row-preview-img {
-  width: 110px; height: 62px; border-radius: 8px; overflow: hidden;
+  width: 168px; height: 94px; border-radius: 8px; overflow: hidden;
   background: var(--bg3); border: 1px solid var(--border);
 }
-.row-preview-img img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+.row-preview-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .rp-placeholder { width: 100%; height: 100%; background: var(--bg); }
 .row-preview-name {
   font-size: .72rem; color: var(--text2); margin-top: .3rem;

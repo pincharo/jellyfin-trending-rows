@@ -528,7 +528,7 @@ const App = {
     const rows = await api('GET', '/rows');
     const el = $('rows-list');
     const sections = await Promise.all(rows.map(async r => {
-      const chs = await api('GET', `/rows/${r.id}/channels`);
+      const chs = await api('GET', `/rows/${r.id}/preview`);
       return { row: r, channels: chs };
     }));
     el.innerHTML = sections.map(({ row, channels }) => `
@@ -551,11 +551,9 @@ const App = {
             ${channels.map(c => `
               <div class="row-preview-card">
                 <div class="row-preview-img">
-                  ${c.logo_url
-                    ? `<img src="${esc(c.logo_url)}" onerror="this.className='rp-placeholder'" />`
-                    : `<div class="rp-placeholder"></div>`}
+                  <img src="${esc(c.poster)}" loading="lazy" onerror="this.className='rp-placeholder'" />
                 </div>
-                <div class="row-preview-name">${esc(c.name)}</div>
+                <div class="row-preview-name" title="${esc(c.name)}">${esc(c.name)}</div>
                 <button class="row-preview-remove" onclick="App.removeFromRow(${row.id},${c.id})" title="Quitar">×</button>
               </div>
             `).join('')}

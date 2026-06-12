@@ -3,6 +3,7 @@ import db from '../db.js';
 import { login, logout, requireAuth } from '../auth.js';
 import { refreshPlaylist } from '../services/playlistRefresh.js';
 import { refreshEpgSource, autoMatchEpg } from '../services/epgRefresh.js';
+import { channelsForRow } from '../services/catalog.js';
 import { slugify, sha1hex } from '../util/index.js';
 import { getLogs } from '../util/logger.js';
 import { reschedule } from '../services/scheduler.js';
@@ -151,6 +152,24 @@ router.put('/rows/:id', (req, res) => {
     name ?? row.name, enabled ?? row.enabled, sort_order ?? row.sort_order, row.id
   );
   res.json({ ok: true });
+});
+
+// preview: exactly what the addon will serve for this row (fanart / generated poster)
+router.get('/rows/:id/preview', (req, res) => {
+  const row = db.prepare('SELECT * FROM rows WHERE id=?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'No encontrada' });
+  const idBySlug = Object.fromEntries(
+    db.prepare('SELECT slug,id FROM logical_channels').all().map(r => [r.slug, r.id])
+  );
+  const metas = channelsForRow(row.slug, 0, 100, { ignoreEnabled: true });
+  res.json(metas.map(m => {
+    const slug = m.id.replace('iptv:', '');
+    // generated posters: serve relative so the admin works on any host, not just BASE_URL
+    const poster = m.poster.includes('/poster/channel/')
+      ? `/poster/channel/${slug}.webp`
+      : m.poster;
+    return { id: idBySlug[slug], name: m.name, poster };
+  }));
 });
 
 // channels in a row

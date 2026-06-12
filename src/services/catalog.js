@@ -40,8 +40,10 @@ function buildDescription(ch, map) {
   return `Ahora: ${prog.title} (${formatTime(prog.start, TZ)}–${formatTime(prog.stop, TZ)})`;
 }
 
-export function channelsForRow(rowSlug, skip = 0, limit = 100) {
-  const row = db.prepare('SELECT id FROM rows WHERE slug=? AND enabled=1').get(rowSlug);
+export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled = false } = {}) {
+  const row = ignoreEnabled
+    ? db.prepare('SELECT id FROM rows WHERE slug=?').get(rowSlug)
+    : db.prepare('SELECT id FROM rows WHERE slug=? AND enabled=1').get(rowSlug);
   if (!row) return [];
 
   const channels = db.prepare(`
