@@ -248,3 +248,80 @@ test('source reorder endpoint swaps priorities atomically', async () => {
   const after = await (await fetch(`${baseUrl}/api/admin/channels/${ch.id}/sources`, { headers })).json();
   assert.deepEqual(after.map(s => s.id), reversed);
 });
+
+test('row display_mode canal uses channel name and default_poster', async () => {
+  const headers = { cookie, 'Content-Type': 'application/json' };
+  const futbolRow = db.prepare("SELECT id FROM rows WHERE slug='futbol'").get();
+
+  // Switch to canal mode with a default poster
+  const sw = await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}`, {
+    method: 'PUT', headers,
+    body: JSON.stringify({ display_mode: 'canal', default_poster: 'https://example.com/futbol-bg.jpg' }),
+  });
+  assert.equal(sw.status, 200);
+
+  const cat = await (await fetch(`${baseUrl}/test-token/catalog/tv/iptv_futbol.json`)).json();
+  const laliga = cat.metas.find(m => m.name === 'M+ LaLiga');
+  assert.ok(laliga, 'M+ LaLiga should be in the row');
+  // In canal mode: name = channel name (not programme title)
+  assert.equal(laliga.name, 'M+ LaLiga');
+  // In canal mode: poster = default_poster (no custom_poster set yet)
+  assert.equal(laliga.poster, 'https://example.com/futbol-bg.jpg');
+  // background still shows fanart from EPG
+  assert.equal(laliga.background, 'https://fanart.example/clasico.jpg');
+});
+
+test('custom_poster and custom_name per channel-row take highest priority', async () => {
+  const headers = { cookie, 'Content-Type': 'application/json' };
+  const futbolRow = db.prepare("SELECT id FROM rows WHERE slug='futbol'").get();
+  const laligaCh  = db.prepare("SELECT id FROM logical_channels WHERE name='M+ LaLiga'").get();
+
+  // Set per-channel-row overrides
+  const r = await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}/channels/${laligaCh.id}/custom`, {
+    method: 'PUT', headers,
+    body: JSON.stringify({ custom_poster: 'https://example.com/laliga-custom.jpg', custom_name: 'LaLiga EA Sports' }),
+  });
+  assert.equal(r.status, 200);
+
+  const cat = await (await fetch(`${baseUrl}/test-token/catalog/tv/iptv_futbol.json`)).json();
+  const entry = cat.metas.find(m => m.id === `iptv:${db.prepare("SELECT slug FROM logical_channels WHERE name='M+ LaLiga'").get().slug}`);
+  // custom_name wins over channel name (canal mode) and programme title (epg mode)
+  assert.equal(entry.name, 'LaLiga EA Sports');
+  // custom_poster wins over default_poster and fanart
+  assert.equal(entry.poster, 'https://example.com/laliga-custom.jpg');
+
+  // preview endpoint exposes the custom fields
+  const prev = await (await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}/preview`, { headers })).json();
+  const pch = prev.channels.find(c => c.id === laligaCh.id);
+  assert.equal(pch.custom_poster, 'https://example.com/laliga-custom.jpg');
+  assert.equal(pch.custom_name, 'LaLiga EA Sports');
+});
+
+test('custom_name in epg mode overrides programme title, row mode reverts to epg', async () => {
+  const headers = { cookie, 'Content-Type': 'application/json' };
+  const futbolRow = db.prepare("SELECT id FROM rows WHERE slug='futbol'").get();
+  const laligaCh  = db.prepare("SELECT id FROM logical_channels WHERE name='M+ LaLiga'").get();
+
+  // Revert row to EPG mode first
+  await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}`, {
+    method: 'PUT', headers, body: JSON.stringify({ display_mode: 'epg' }),
+  });
+
+  // custom_name should still override the programme title in EPG mode
+  const cat = await (await fetch(`${baseUrl}/test-token/catalog/tv/iptv_futbol.json`)).json();
+  const slug = db.prepare("SELECT slug FROM logical_channels WHERE name='M+ LaLiga'").get().slug;
+  const entry = cat.metas.find(m => m.id === `iptv:${slug}`);
+  assert.equal(entry.name, 'LaLiga EA Sports');
+  // poster falls back to fanart (EPG mode, custom_poster still set from previous test)
+  assert.equal(entry.poster, 'https://example.com/laliga-custom.jpg');
+
+  // Clear the custom overrides
+  await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}/channels/${laligaCh.id}/custom`, {
+    method: 'PUT', headers, body: JSON.stringify({ custom_poster: '', custom_name: '' }),
+  });
+  const cat2 = await (await fetch(`${baseUrl}/test-token/catalog/tv/iptv_futbol.json`)).json();
+  const entry2 = cat2.metas.find(m => m.id === `iptv:${slug}`);
+  // Back to EPG mode default: programme title — channel name
+  assert.equal(entry2.name, 'Real Madrid vs Barcelona — M+ LaLiga');
+  assert.equal(entry2.poster, 'https://fanart.example/clasico.jpg');
+});

@@ -184,7 +184,8 @@ input::placeholder { color: var(--text2); }
 .badge-ok { background: rgba(52,211,153,.13); color: var(--success); }
 .badge-err { background: rgba(240,80,110,.13); color: var(--danger); }
 .badge-idle { background: var(--glass2); color: var(--text2); }
-.badge-acc { background: var(--accent-soft); color: var(--accent); }
+.badge-acc    { background: var(--accent-soft); color: var(--accent); }
+.badge-accent { background: var(--accent-soft); color: var(--accent); font-style: italic; }
 
 /* ── Stats (dashboard) ─────────────────────────────────────────────────────── */
 .stats-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .8rem; }
@@ -356,9 +357,15 @@ input::placeholder { color: var(--text2); }
 .rp-placeholder { width: 100%; height: 100%; background: var(--bg); }
 
 .row-preview-card.rp-off .row-preview-img { opacity: .38; }
+.row-preview-card.rp-custom { box-shadow: 0 0 0 2px var(--accent); border-radius: 12px; }
 .rp-off-badge {
   position: absolute; top: 6px; left: 6px; z-index: 2;
   background: rgba(0,0,0,.65); color: var(--warn); font-size: .66rem; font-weight: 700;
+  padding: .12rem .42rem; border-radius: 5px; backdrop-filter: blur(4px);
+}
+.rp-custom-badge {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  background: rgba(91,124,250,.75); color: #fff; font-size: .7rem; font-weight: 700;
   padding: .12rem .42rem; border-radius: 5px; backdrop-filter: blur(4px);
 }
 

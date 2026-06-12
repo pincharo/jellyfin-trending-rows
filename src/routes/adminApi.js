@@ -164,11 +164,19 @@ router.delete('/rows/:id', (req, res) => {
 });
 
 router.put('/rows/:id', (req, res) => {
-  const { name, enabled, sort_order } = req.body;
+  const { name, enabled, sort_order, display_mode, default_poster } = req.body;
   const row = db.prepare('SELECT * FROM rows WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'No encontrada' });
-  db.prepare('UPDATE rows SET name=?,enabled=?,sort_order=? WHERE id=?').run(
-    name ?? row.name, enabled ?? row.enabled, sort_order ?? row.sort_order, row.id
+  if (display_mode !== undefined && !['epg', 'canal'].includes(display_mode)) {
+    return res.status(400).json({ error: "display_mode debe ser 'epg' o 'canal'" });
+  }
+  db.prepare('UPDATE rows SET name=?,enabled=?,sort_order=?,display_mode=?,default_poster=? WHERE id=?').run(
+    name ?? row.name,
+    enabled ?? row.enabled,
+    sort_order ?? row.sort_order,
+    display_mode ?? row.display_mode ?? 'epg',
+    default_poster !== undefined ? default_poster : (row.default_poster ?? ''),
+    row.id
   );
   res.json({ ok: true });
 });
@@ -179,12 +187,14 @@ router.get('/rows/:id/preview', (req, res) => {
   const row = db.prepare('SELECT * FROM rows WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'No encontrada' });
   const orientation = db.prepare("SELECT value FROM settings WHERE key='poster_orientation'").get()?.value || 'landscape';
+  const displayMode = row.display_mode || 'epg';
 
   const metas = channelsForRow(row.slug, 0, 100, { ignoreEnabled: true });
   const metaBySlug = Object.fromEntries(metas.map(m => [m.id.replace('iptv:', ''), m]));
 
   const all = db.prepare(`
-    SELECT lc.id, lc.slug, lc.name, lc.enabled
+    SELECT lc.id, lc.slug, lc.name, lc.enabled,
+           cr.custom_poster, cr.custom_name
     FROM channel_rows cr JOIN logical_channels lc ON lc.id=cr.logical_channel_id
     WHERE cr.row_id=? ORDER BY cr.sort_order, lc.sort_order
   `).all(row.id);
@@ -200,9 +210,11 @@ router.get('/rows/:id/preview', (req, res) => {
       poster,
       fallback: generated,
       enabled: !!c.enabled,
+      custom_poster: c.custom_poster || '',
+      custom_name: c.custom_name || '',
     };
   });
-  res.json({ orientation, channels });
+  res.json({ orientation, displayMode, channels });
 });
 
 // channels in a row
@@ -227,6 +239,16 @@ router.post('/rows/:id/channels', (req, res) => {
 
 router.delete('/rows/:id/channels/:chId', (req, res) => {
   db.prepare('DELETE FROM channel_rows WHERE row_id=? AND logical_channel_id=?').run(req.params.id, req.params.chId);
+  res.json({ ok: true });
+});
+
+// per-channel-per-row custom poster and name overrides
+router.put('/rows/:id/channels/:chId/custom', (req, res) => {
+  const { custom_poster = '', custom_name = '' } = req.body;
+  const r = db.prepare(
+    'UPDATE channel_rows SET custom_poster=?,custom_name=? WHERE row_id=? AND logical_channel_id=?'
+  ).run(custom_poster, custom_name, req.params.id, req.params.chId);
+  if (r.changes === 0) return res.status(404).json({ error: 'Canal no está en esta fila' });
   res.json({ ok: true });
 });
 

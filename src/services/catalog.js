@@ -42,12 +42,15 @@ function buildDescription(ch, map) {
 
 export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled = false } = {}) {
   const row = ignoreEnabled
-    ? db.prepare('SELECT id FROM rows WHERE slug=?').get(rowSlug)
-    : db.prepare('SELECT id FROM rows WHERE slug=? AND enabled=1').get(rowSlug);
+    ? db.prepare('SELECT id, display_mode, default_poster FROM rows WHERE slug=?').get(rowSlug)
+    : db.prepare('SELECT id, display_mode, default_poster FROM rows WHERE slug=? AND enabled=1').get(rowSlug);
   if (!row) return [];
 
+  const isCanal = (row.display_mode || 'epg') === 'canal';
+
   const channels = db.prepare(`
-    SELECT lc.id, lc.slug, lc.name, lc.logo_url, lc.sort_order
+    SELECT lc.id, lc.slug, lc.name, lc.logo_url, lc.sort_order,
+           cr.custom_poster, cr.custom_name
     FROM logical_channels lc
     JOIN channel_rows cr ON cr.logical_channel_id=lc.id
     WHERE cr.row_id=? AND lc.enabled=1
@@ -64,13 +67,26 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled =
     const prog = map ? currentProgramme(map.epg_channel_id, map.epg_source_id) : null;
     const fanart = prog?.icon || '';
     const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
-    // Portrait mode: always use the generated portrait poster (fanart is landscape-shaped).
-    // Background keeps the fanart because Nuvio stretches it behind the detail view anyway.
+
+    // Name: per-row custom_name wins, then mode determines the default
+    const name = ch.custom_name || (isCanal ? ch.name : (prog ? `${prog.title} — ${ch.name}` : ch.name));
+
+    // Poster: per-row custom_poster wins, then mode determines the default
+    let poster;
+    if (ch.custom_poster) {
+      poster = ch.custom_poster;
+    } else if (isCanal) {
+      poster = row.default_poster || generated;
+    } else {
+      // EPG mode: portrait always uses generated (fanart is landscape-shaped)
+      poster = isPortrait ? generated : (fanart || generated);
+    }
+
     return {
       id: `iptv:${ch.slug}`,
       type: 'tv',
-      name: prog ? `${prog.title} — ${ch.name}` : ch.name,
-      poster: isPortrait ? generated : (fanart || generated),
+      name,
+      poster,
       posterShape,
       logo: channelIcon || undefined,
       description: desc,

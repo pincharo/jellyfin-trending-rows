@@ -14,11 +14,13 @@ const $ = id => document.getElementById(id);
 
 // tiny inline icons for tile tools
 const ICONS = {
-  left:  '<svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg>',
-  right: '<svg viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></svg>',
-  eye:   '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>',
-  eyeOff:'<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.5 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-3.2 3.8M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 4.2-.9"/></svg>',
-  x:     '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  left:   '<svg viewBox="0 0 24 24"><path d="m14 6-6 6 6 6"/></svg>',
+  right:  '<svg viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></svg>',
+  eye:    '<svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>',
+  eyeOff: '<svg viewBox="0 0 24 24"><path d="M3 3l18 18M10.5 5.2A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17.8 17.8 0 0 1-3.2 3.8M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a10 10 0 0 0 4.2-.9"/></svg>',
+  x:      '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  gear:   '<svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>',
 };
 
 // ── Toasts ────────────────────────────────────────────────────────────────────
@@ -746,7 +748,11 @@ const App = {
       return { row: r, ...prev };
     }));
     const el = $('rows-list');
-    el.innerHTML = sections.map(({ row, channels, orientation }, idx) => `
+    el.innerHTML = sections.map(({ row, channels, orientation, displayMode }, idx) => {
+      const mode = displayMode || row.display_mode || 'epg';
+      const modeLabel = mode === 'canal' ? 'Carátula' : 'EPG';
+      const modeCls   = mode === 'canal' ? 'badge-accent' : 'badge-idle';
+      return `
       <div class="card row-card">
         <div class="row-card-head">
           <div class="row-order-btns">
@@ -754,8 +760,10 @@ const App = {
             <button class="mini-btn" onclick="App.moveRow(${row.id},1)" ${idx === sections.length - 1 ? 'disabled' : ''} title="Bajar">▼</button>
           </div>
           <span class="row-name" id="row-name-${row.id}" onclick="App.editRowName(${row.id})" title="Clic para renombrar">${esc(row.name)}</span>
+          <span class="badge ${modeCls}" title="Modo de visualización de la fila">${modeLabel}</span>
           <span class="badge badge-idle">${channels.length} canal(es)</span>
           <div class="card-actions" style="margin-left:auto">
+            <button class="mini-btn" onclick="App.openRowSettings(${row.id})" title="Configurar modo de la fila">${ICONS.gear}</button>
             <label class="switch-label" title="Visible en el addon">
               <span class="switch"><input type="checkbox" ${row.enabled ? 'checked' : ''} onchange="App.toggleRow(${row.id}, this.checked)" /><span class="track"></span></span>
             </label>
@@ -765,26 +773,30 @@ const App = {
         </div>
         ${channels.length ? `
           <div class="row-preview" title="Previsualización — así aparecerá en Stremio/Nuvio">
-            ${channels.map((c, ci) => `
-              <div class="row-preview-card row-preview-${orientation} ${c.enabled ? '' : 'rp-off'}">
+            ${channels.map((c, ci) => {
+              const hasCustom = !!(c.custom_poster || c.custom_name);
+              return `
+              <div class="row-preview-card row-preview-${orientation} ${c.enabled ? '' : 'rp-off'} ${hasCustom ? 'rp-custom' : ''}">
                 <div class="row-preview-img row-preview-img-${orientation}">
                   ${c.enabled ? '' : '<span class="rp-off-badge">OCULTO</span>'}
+                  ${hasCustom ? '<span class="rp-custom-badge" title="Tiene personalización en esta fila">✏</span>' : ''}
                   <img src="${esc(c.poster)}" loading="lazy"
                     onerror="if(this.getAttribute('data-fb')){this.className='rp-placeholder';this.removeAttribute('data-fb');}else{this.setAttribute('data-fb','1');this.src='${escAttr(c.fallback)}'}" />
                   <div class="rp-tools">
                     <button class="rp-tool" onclick="App.moveInRow(${row.id},${ci},-1)" ${ci === 0 ? 'disabled' : ''} title="Mover a la izquierda">${ICONS.left}</button>
                     <button class="rp-tool" onclick="App.toggleChannelEnabled(${c.id},${c.enabled ? 0 : 1})" title="${c.enabled ? 'Ocultar canal en el addon' : 'Mostrar canal en el addon'}">${c.enabled ? ICONS.eyeOff : ICONS.eye}</button>
+                    <button class="rp-tool" onclick="App.openRowChannelCustom(${row.id},${c.id},'${escAttr(c.custom_poster||'')}','${escAttr(c.custom_name||'')}','${escAttr(c.name)}')" title="Personalizar en esta fila">${ICONS.pencil}</button>
                     <button class="rp-tool" onclick="App.moveInRow(${row.id},${ci},1)" ${ci === channels.length - 1 ? 'disabled' : ''} title="Mover a la derecha">${ICONS.right}</button>
                     <button class="rp-tool rp-tool-danger" onclick="App.removeFromRow(${row.id},${c.id})" title="Quitar de la fila">${ICONS.x}</button>
                   </div>
                 </div>
-                <div class="row-preview-name" title="${esc(c.name)}">${esc(c.name)}</div>
-              </div>
-            `).join('')}
+                <div class="row-preview-name" title="${esc(c.name)}">${esc(c.custom_name || c.name)}</div>
+              </div>`;
+            }).join('')}
           </div>
         ` : '<p class="row-empty" style="padding:.6rem .3rem">Vacía — pulsa "+ Canal" para añadir</p>'}
-      </div>
-    `).join('') || `<div class="empty-state"><p>No hay filas todavía. Pulsa "+ Nueva fila" para crear una.</p></div>`;
+      </div>`;
+    }).join('') || `<div class="empty-state"><p>No hay filas todavía. Pulsa "+ Nueva fila" para crear una.</p></div>`;
   },
 
   openAddRow() {
@@ -856,6 +868,91 @@ const App = {
       if (e.key === 'Escape') { input.value = current; input.blur(); }
     });
     input.addEventListener('blur', save, { once: true });
+  },
+
+  openRowSettings(rowId) {
+    const row = this._rows.find(r => r.id === rowId);
+    if (!row) return;
+    const mode = row.display_mode || 'epg';
+    openModal(`
+      <h3>Configurar fila: ${esc(row.name)}</h3>
+      <p class="hint" style="margin-bottom:1rem">Elige cómo se visualizan los canales en Stremio/Nuvio. Puedes personalizar cada canal individualmente con el botón ✏ del tile.</p>
+      <div class="orientation-btns" id="row-mode-btns" style="margin-bottom:1rem">
+        <button class="orient-btn ${mode === 'epg' ? 'orient-active' : ''}" onclick="App._selectRowMode('epg')" data-mode="epg">
+          <span class="orient-label">EPG en directo</span>
+          <span class="orient-hint">Título del evento + fanart</span>
+        </button>
+        <button class="orient-btn ${mode === 'canal' ? 'orient-active' : ''}" onclick="App._selectRowMode('canal')" data-mode="canal">
+          <span class="orient-label">Nombre de canal</span>
+          <span class="orient-hint">Nombre + carátula fija</span>
+        </button>
+      </div>
+      <div class="form-group">
+        <label>Poster por defecto de la fila (URL) <span class="hint">— se usa cuando el modo es "Nombre de canal" y el canal no tiene poster propio</span></label>
+        <input id="row-default-poster" value="${esc(row.default_poster || '')}" placeholder="https://…" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-grad" onclick="App.saveRowSettings(${rowId})">Guardar</button>
+      </div>
+    `);
+  },
+
+  _selectRowMode(mode) {
+    document.querySelectorAll('#row-mode-btns .orient-btn').forEach(b => {
+      b.classList.toggle('orient-active', b.dataset.mode === mode);
+    });
+  },
+
+  async saveRowSettings(rowId) {
+    const mode = document.querySelector('#row-mode-btns .orient-active')?.dataset.mode || 'epg';
+    const defaultPoster = $('row-default-poster')?.value.trim() || '';
+    try {
+      await api('PUT', `/rows/${rowId}`, { display_mode: mode, default_poster: defaultPoster });
+      toast('Configuración guardada', 'ok');
+      closeModal();
+      await this.loadRows();
+    } catch (err) { toast(err.message, 'err'); }
+  },
+
+  openRowChannelCustom(rowId, chId, customPoster, customName, channelName) {
+    openModal(`
+      <h3>Personalizar canal en esta fila</h3>
+      <p class="hint" style="margin-bottom:1rem">Estos valores solo afectan a <b>${esc(channelName)}</b> <em>dentro de esta fila</em>. El canal sigue igual en las demás filas.</p>
+      <div class="form-group">
+        <label>Poster custom para esta fila (URL)</label>
+        <input id="rc-poster" value="${esc(customPoster)}" placeholder="https://… (vacío = usa el de la fila)" />
+      </div>
+      <div class="form-group">
+        <label>Nombre custom para esta fila</label>
+        <input id="rc-name" value="${esc(customName)}" placeholder="${esc(channelName)} (vacío = usa el predeterminado)" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-ghost" onclick="App.clearRowChannelCustom(${rowId},${chId})">Limpiar</button>
+        <button class="btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-grad" onclick="App.saveRowChannelCustom(${rowId},${chId})">Guardar</button>
+      </div>
+    `);
+  },
+
+  async saveRowChannelCustom(rowId, chId) {
+    const custom_poster = $('rc-poster')?.value.trim() || '';
+    const custom_name   = $('rc-name')?.value.trim() || '';
+    try {
+      await api('PUT', `/rows/${rowId}/channels/${chId}/custom`, { custom_poster, custom_name });
+      toast('Personalización guardada', 'ok');
+      closeModal();
+      await this.loadRows();
+    } catch (err) { toast(err.message, 'err'); }
+  },
+
+  async clearRowChannelCustom(rowId, chId) {
+    try {
+      await api('PUT', `/rows/${rowId}/channels/${chId}/custom`, { custom_poster: '', custom_name: '' });
+      toast('Personalización eliminada', 'ok');
+      closeModal();
+      await this.loadRows();
+    } catch (err) { toast(err.message, 'err'); }
   },
 
   async moveInRow(rowId, idx, dir) {

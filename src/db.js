@@ -10,7 +10,7 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
@@ -40,11 +40,13 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS rows (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    slug       TEXT UNIQUE NOT NULL,
-    name       TEXT NOT NULL,
-    sort_order INTEGER DEFAULT 0,
-    enabled    INTEGER DEFAULT 1
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug           TEXT UNIQUE NOT NULL,
+    name           TEXT NOT NULL,
+    sort_order     INTEGER DEFAULT 0,
+    enabled        INTEGER DEFAULT 1,
+    display_mode   TEXT DEFAULT 'epg',
+    default_poster TEXT DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS logical_channels (
@@ -69,6 +71,8 @@ db.exec(`
     logical_channel_id  INTEGER NOT NULL REFERENCES logical_channels(id) ON DELETE CASCADE,
     row_id              INTEGER NOT NULL REFERENCES rows(id) ON DELETE CASCADE,
     sort_order          INTEGER DEFAULT 0,
+    custom_poster       TEXT DEFAULT '',
+    custom_name         TEXT DEFAULT '',
     PRIMARY KEY(logical_channel_id, row_id)
   );
 
@@ -138,6 +142,14 @@ if (currentVersion < 2) {
   try { db.exec("ALTER TABLE programmes ADD COLUMN icon TEXT DEFAULT ''"); } catch {}
   db.prepare("INSERT OR IGNORE INTO settings(key,value) VALUES('poster_orientation','landscape')").run();
   db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('schema_version','2')").run();
+}
+
+if (currentVersion < 3) {
+  try { db.exec("ALTER TABLE rows ADD COLUMN display_mode TEXT DEFAULT 'epg'"); } catch {}
+  try { db.exec("ALTER TABLE rows ADD COLUMN default_poster TEXT DEFAULT ''"); } catch {}
+  try { db.exec("ALTER TABLE channel_rows ADD COLUMN custom_poster TEXT DEFAULT ''"); } catch {}
+  try { db.exec("ALTER TABLE channel_rows ADD COLUMN custom_name TEXT DEFAULT ''"); } catch {}
+  db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('schema_version','3')").run();
 }
 
 export default db;
