@@ -216,6 +216,7 @@ input:focus, select:focus { border-color: var(--accent); }
 /* ── Rows ── */
 .row-card { flex-direction: column; align-items: stretch; }
 .row-card-head { display: flex; align-items: center; gap: 1rem; width: 100%; }
+/* legacy chip (kept for compat) */
 .row-channels { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .8rem; }
 .row-ch-chip {
   display: flex; align-items: center; gap: .45rem; padding: .35rem .7rem;
@@ -225,6 +226,37 @@ input:focus, select:focus { border-color: var(--accent); }
 .row-ch-chip button { background: none; border: none; color: var(--text2); cursor: pointer; line-height: 1; padding: 0 2px; font-size: 1rem; }
 .row-ch-chip button:hover { color: var(--danger); }
 .row-empty { color: var(--text2); font-size: .82rem; font-style: italic; }
+
+/* ── Row preview (thumbnail strip) ── */
+.row-preview {
+  display: flex; gap: .6rem; overflow-x: auto; padding: .6rem .2rem .4rem;
+  margin-top: .5rem; scroll-snap-type: x mandatory;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.row-preview-card {
+  flex-shrink: 0; width: 110px; position: relative; scroll-snap-align: start;
+  cursor: default;
+}
+.row-preview-img {
+  width: 110px; height: 62px; border-radius: 8px; overflow: hidden;
+  background: var(--bg3); border: 1px solid var(--border);
+}
+.row-preview-img img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+.rp-placeholder { width: 100%; height: 100%; background: var(--bg); }
+.row-preview-name {
+  font-size: .72rem; color: var(--text2); margin-top: .3rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: center;
+}
+.row-preview-remove {
+  position: absolute; top: -5px; right: -5px;
+  width: 18px; height: 18px; border-radius: 50%; background: var(--bg3);
+  border: 1px solid var(--border); color: var(--text2); font-size: .8rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  line-height: 1; opacity: 0; transition: opacity .15s;
+}
+.row-preview-card:hover .row-preview-remove { opacity: 1; }
+.row-preview-remove:hover { background: var(--danger); color: #fff; border-color: var(--danger); }
 
 /* ── Logs ── */
 .log-autorefresh { display: flex; align-items: center; gap: .4rem; color: var(--text2); font-size: .82rem; }

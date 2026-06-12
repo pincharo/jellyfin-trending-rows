@@ -10,7 +10,7 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
@@ -130,10 +130,13 @@ if (rowCount === 0) {
   for (const r of DEFAULT_ROWS) insertRow.run(r.slug, r.name, r.sort_order);
 }
 
-// schema version tracking
+// schema version tracking + migrations
 const storedVersion = db.prepare("SELECT value FROM settings WHERE key='schema_version'").get();
-if (!storedVersion) {
-  db.prepare("INSERT INTO settings(key,value) VALUES('schema_version',?)").run(String(SCHEMA_VERSION));
+const currentVersion = storedVersion ? Number(storedVersion.value) : 0;
+
+if (currentVersion < 2) {
+  try { db.exec("ALTER TABLE programmes ADD COLUMN icon TEXT DEFAULT ''"); } catch {}
+  db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('schema_version','2')").run();
 }
 
 export default db;

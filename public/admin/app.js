@@ -136,7 +136,7 @@ const App = {
         done: s.channels_in_rows > 0,
         title: '3 · Colócalos en filas',
         desc: s.channels_in_rows === 0
-          ? 'Ve a Filas y añade tus canales a las secciones donde quieres verlos en Stremio: Canales, Fútbol, Baloncesto o Motor.'
+          ? 'Ve a Filas y añade tus canales a las secciones donde quieres verlos en Stremio/Nuvio. Puedes usar las filas por defecto (Canales, Fútbol…) o crear las tuyas.'
           : `${s.channels_in_rows} canal(es) asignados a filas.`,
         tab: 'rows',
       },
@@ -292,6 +292,7 @@ const App = {
           <div class="card-subtitle">id: iptv:${esc(ch.slug)}</div>
         </div>
         <div class="card-actions">
+          <button class="btn-ghost btn-sm" onclick="App.openEditChannel(${ch.id},'${escAttr(ch.name)}','${escAttr(ch.logo_url || '')}')">✎ Editar</button>
           <button class="btn btn-sm" onclick="App.openSources(${ch.id},'${escAttr(ch.name)}')">⚙ Fuentes</button>
           <button class="btn btn-sm btn-danger" onclick="App.deleteChannel(${ch.id})">✕</button>
         </div>
@@ -396,6 +397,31 @@ const App = {
     await api('DELETE', `/channels/${id}`);
     toast('Canal eliminado', 'ok');
     this.loadChannels();
+  },
+
+  openEditChannel(id, name, logo) {
+    openModal(`
+      <h3>Editar canal</h3>
+      <div class="form-group"><label>Nombre</label><input id="edit-ch-name" value="${esc(name)}" /></div>
+      <div class="form-group"><label>Logo URL</label><input id="edit-ch-logo" value="${esc(logo)}" placeholder="https://…" /></div>
+      <div class="form-actions">
+        <button class="btn-ghost" onclick="App.closeModal()">Cancelar</button>
+        <button class="btn" onclick="App.saveChannel(${id})">Guardar</button>
+      </div>
+    `);
+    $('edit-ch-name').focus();
+  },
+
+  async saveChannel(id) {
+    const name = $('edit-ch-name').value.trim();
+    const logo = $('edit-ch-logo').value.trim();
+    if (!name) return toast('El nombre no puede estar vacío', 'err');
+    try {
+      await api('PUT', `/channels/${id}`, { name, logo_url: logo });
+      closeModal();
+      toast('Canal actualizado', 'ok');
+      this.loadChannels();
+    } catch (err) { toast(err.message, 'err'); }
   },
 
   async openSources(channelId, channelName) {
@@ -511,28 +537,43 @@ const App = {
           <div class="card-body">
             <div class="card-title">${esc(row.name)}
               ${row.enabled ? '<span class="badge badge-ok">visible</span>' : '<span class="badge badge-idle">oculta</span>'}
+              <span class="badge badge-idle" style="font-size:.7rem">${channels.length} canal(es)</span>
             </div>
           </div>
           <div class="card-actions">
             <button class="btn-ghost btn-sm" onclick="App.toggleRow(${row.id},${row.enabled})">${row.enabled ? 'Ocultar' : 'Mostrar'}</button>
             <button class="btn btn-sm" onclick="App.openAddToRow(${row.id},'${escAttr(row.name)}')">+ Canal</button>
+            <button class="btn btn-sm btn-danger" onclick="App.deleteRow(${row.id},'${escAttr(row.name)}')">✕</button>
           </div>
         </div>
-        <div class="row-channels">
-          ${channels.map(c => `
-            <div class="row-ch-chip">
-              ${c.logo_url ? `<img src="${esc(c.logo_url)}" onerror="this.style.display='none'" />` : ''}
-              ${esc(c.name)}
-              <button onclick="App.removeFromRow(${row.id},${c.id})" title="Quitar de la fila">×</button>
-            </div>
-          `).join('') || '<span class="row-empty">Vacía — pulsa "+ Canal" para añadir</span>'}
-        </div>
+        ${channels.length ? `
+          <div class="row-preview" title="Previsualización — así aparecerá en Stremio/Nuvio">
+            ${channels.map(c => `
+              <div class="row-preview-card">
+                <div class="row-preview-img">
+                  ${c.logo_url
+                    ? `<img src="${esc(c.logo_url)}" onerror="this.className='rp-placeholder'" />`
+                    : `<div class="rp-placeholder"></div>`}
+                </div>
+                <div class="row-preview-name">${esc(c.name)}</div>
+                <button class="row-preview-remove" onclick="App.removeFromRow(${row.id},${c.id})" title="Quitar">×</button>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<p class="row-empty" style="padding:.6rem .3rem">Vacía — pulsa "+ Canal" para añadir</p>'}
       </div>
-    `).join('');
+    `).join('') || `<div class="empty-state"><p>No hay filas todavía. Pulsa "+ Nueva fila" para crear una.</p></div>`;
   },
 
   async toggleRow(id, enabled) {
     await api('PUT', `/rows/${id}`, { enabled: enabled ? 0 : 1 });
+    this.loadRows();
+  },
+
+  async deleteRow(id, name) {
+    if (!confirm(`¿Eliminar la fila "${name}"? Los canales no se borran, solo se quitan de esta fila.`)) return;
+    await api('DELETE', `/rows/${id}`);
+    toast('Fila eliminada', 'ok');
     this.loadRows();
   },
 
@@ -541,23 +582,64 @@ const App = {
     this.loadRows();
   },
 
+  openAddRow() {
+    openModal(`
+      <h3>Nueva fila</h3>
+      <div class="form-group">
+        <label>Nombre de la sección (aparecerá como título en Stremio/Nuvio)</label>
+        <input id="row-name" placeholder="Fútbol, Series, Motor, Liga…" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-ghost" onclick="App.closeModal()">Cancelar</button>
+        <button class="btn" onclick="App.addRow()">Crear</button>
+      </div>
+    `);
+    $('row-name').focus();
+  },
+
+  async addRow() {
+    const name = $('row-name').value.trim();
+    if (!name) return toast('Introduce un nombre para la fila', 'err');
+    try {
+      await api('POST', '/rows', { name });
+      closeModal();
+      toast(`Fila "${name}" creada`, 'ok');
+      this.loadRows();
+    } catch (err) { toast(err.message, 'err'); }
+  },
+
   async openAddToRow(rowId, rowName) {
-    const channels = await api('GET', '/channels');
+    const [channels, rowChs] = await Promise.all([
+      api('GET', '/channels'),
+      api('GET', `/rows/${rowId}/channels`),
+    ]);
     if (!channels.length) {
       toast('Primero crea canales en la pestaña Canales', 'err');
       return;
     }
+    const inRow = new Set(rowChs.map(c => c.id));
     openModal(`
       <h3>Añadir canal a "${esc(rowName)}"</h3>
-      <div class="picker-list" style="max-height:360px">
+      <input class="picker-search" id="row-ch-q" placeholder="🔍 Filtrar…" oninput="App._filterRowChannels(this.value)" style="margin-bottom:.5rem" />
+      <div class="picker-list" id="row-ch-list" style="max-height:360px">
         ${channels.map(c => `
-          <div class="picker-item" onclick="App.addToRow(${rowId},${c.id})">
+          <div class="picker-item${inRow.has(c.id) ? ' picker-item-added' : ''}"
+            ${!inRow.has(c.id) ? `onclick="App.addToRow(${rowId},${c.id})"` : ''}>
             ${c.logo_url ? `<img src="${esc(c.logo_url)}" onerror="this.style.visibility='hidden'" />` : '<div class="picker-noimg"></div>'}
             <span>${esc(c.name)}</span>
+            ${inRow.has(c.id) ? '<span class="picker-check">✓ en fila</span>' : ''}
           </div>
         `).join('')}
       </div>
     `);
+    $('row-ch-q').focus();
+  },
+
+  _filterRowChannels(q) {
+    const items = document.querySelectorAll('#row-ch-list .picker-item');
+    items.forEach(el => {
+      el.style.display = el.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+    });
   },
 
   async addToRow(rowId, chId) {

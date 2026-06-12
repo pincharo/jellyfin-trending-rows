@@ -48,12 +48,12 @@ export async function refreshEpgSource(sourceId) {
   const flushProgs = db.transaction(batch => {
     const ins = db.prepare(`
       INSERT OR IGNORE INTO programmes
-        (epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories)
-      VALUES (?,?,?,?,?,?,?,?)
+        (epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories,icon)
+      VALUES (?,?,?,?,?,?,?,?,?)
     `);
     for (const p of batch) {
       ins.run(sourceId, p.epg_channel_id, p.start, p.stop,
-        p.title, p.sub_title, p.description, JSON.stringify(p.categories));
+        p.title, p.sub_title, p.description, JSON.stringify(p.categories), p.icon || '');
     }
   });
 

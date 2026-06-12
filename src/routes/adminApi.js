@@ -125,6 +125,24 @@ router.get('/rows', (req, res) => {
   res.json(db.prepare('SELECT * FROM rows ORDER BY sort_order').all());
 });
 
+router.post('/rows', (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'name requerido' });
+  const slug = slugify(name) + '-' + sha1hex(name).slice(0, 4);
+  const maxOrder = db.prepare('SELECT COALESCE(MAX(sort_order),0) as m FROM rows').get().m;
+  try {
+    const r = db.prepare('INSERT INTO rows(slug,name,sort_order) VALUES(?,?,?)').run(slug, name, maxOrder + 10);
+    res.json({ id: r.lastInsertRowid, slug });
+  } catch {
+    res.status(409).json({ error: 'Ya existe una fila con ese nombre' });
+  }
+});
+
+router.delete('/rows/:id', (req, res) => {
+  db.prepare('DELETE FROM rows WHERE id=?').run(req.params.id);
+  res.json({ ok: true });
+});
+
 router.put('/rows/:id', (req, res) => {
   const { name, enabled, sort_order } = req.body;
   const row = db.prepare('SELECT * FROM rows WHERE id=?').get(req.params.id);

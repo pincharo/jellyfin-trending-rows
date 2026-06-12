@@ -39,7 +39,7 @@ export async function parseXMLTV(readableStream, { onChannel, onProgramme } = {}
         epg_channel_id: attributes.channel,
         start: parseXmltvTime(attributes.start || ''),
         stop:  parseXmltvTime(attributes.stop  || ''),
-        title: '', sub_title: '', description: '', categories: [],
+        title: '', sub_title: '', description: '', categories: [], icon: '',
       };
       collectText = false;
       return;
@@ -52,6 +52,7 @@ export async function parseXMLTV(readableStream, { onChannel, onProgramme } = {}
 
     if (inProgramme) {
       if (name === 'title' || name === 'sub-title' || name === 'desc') collectText = true;
+      if (name === 'icon' && !currentProg.icon) currentProg.icon = attributes.src || '';
     }
   });
 

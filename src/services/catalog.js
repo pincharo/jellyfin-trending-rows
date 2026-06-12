@@ -9,7 +9,7 @@ function nowSec() { return Math.floor(Date.now() / 1000); }
 function currentProgramme(epgChannelId, epgSourceId) {
   const now = nowSec();
   return db.prepare(`
-    SELECT title, sub_title, start, stop
+    SELECT title, sub_title, start, stop, icon
     FROM programmes
     WHERE epg_channel_id=? AND epg_source_id=? AND start<=? AND stop>?
     ORDER BY start DESC LIMIT 1
@@ -56,15 +56,18 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100) {
   return channels.map(ch => {
     const map = epgMap(ch.id);
     const desc = buildDescription(ch, map);
-    const icon = ch.logo_url || (map ? getEpgChannelIcon(map.epg_channel_id, map.epg_source_id) : '');
+    const channelIcon = ch.logo_url || (map ? getEpgChannelIcon(map.epg_channel_id, map.epg_source_id) : '');
+    const prog = map ? currentProgramme(map.epg_channel_id, map.epg_source_id) : null;
+    const fanart = prog?.icon || '';
     return {
       id: `iptv:${ch.slug}`,
       type: 'tv',
       name: ch.name,
-      poster: icon || `${BASE_URL}/placeholder.png`,
-      posterShape: 'square',
+      poster: fanart || channelIcon || `${BASE_URL}/placeholder.png`,
+      posterShape: fanart ? 'landscape' : 'square',
+      logo: channelIcon || undefined,
       description: desc,
-      background: icon || undefined,
+      background: fanart || channelIcon || undefined,
     };
   });
 }
@@ -99,6 +102,7 @@ export function channelMeta(slug) {
   }
 
   const currentProg = map ? currentProgramme(map.epg_channel_id, map.epg_source_id) : null;
+  const fanart = currentProg?.icon || '';
   const desc = currentProg
     ? `Ahora: ${currentProg.title} (${formatTime(currentProg.start, TZ)}–${formatTime(currentProg.stop, TZ)})${schedule}`
     : ch.name + schedule;
@@ -107,9 +111,10 @@ export function channelMeta(slug) {
     id: `iptv:${ch.slug}`,
     type: 'tv',
     name: ch.name,
-    poster: icon,
-    posterShape: 'square',
-    background: icon,
+    poster: fanart || icon,
+    posterShape: fanart ? 'landscape' : 'square',
+    logo: icon || undefined,
+    background: fanart || icon,
     description: desc,
   };
 }
