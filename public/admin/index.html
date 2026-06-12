@@ -9,12 +9,16 @@
 <body>
   <!-- Login -->
   <div id="login-screen" class="screen">
+    <div class="login-bg"></div>
     <div class="login-card">
+      <div class="login-logo">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z"/><path d="m10 10 4 2.5-4 2.5v-5Z" class="fill"/></svg>
+      </div>
       <h1>IPTV<span>Admin</span></h1>
-      <p class="login-hint">Panel de control del addon para Stremio y Nuvio</p>
+      <p class="login-hint">Tu addon privado para Stremio y Nuvio</p>
       <form id="login-form">
         <input type="password" id="login-password" placeholder="Contraseña maestra" autofocus />
-        <button type="submit" class="btn">Entrar</button>
+        <button type="submit" class="btn btn-grad btn-block">Entrar</button>
       </form>
       <p id="login-error" class="error hidden"></p>
     </div>
@@ -22,70 +26,112 @@
 
   <!-- App -->
   <div id="app-screen" class="screen hidden">
-    <nav>
-      <span class="logo">IPTV<b>Admin</b></span>
-      <button class="tab-btn active" data-tab="home">Inicio</button>
-      <button class="tab-btn" data-tab="playlists">Playlists</button>
-      <button class="tab-btn" data-tab="channels">Canales</button>
-      <button class="tab-btn" data-tab="rows">Filas</button>
-      <button class="tab-btn" data-tab="epg">EPG</button>
-      <button class="tab-btn" data-tab="logs">Logs</button>
-      <button class="tab-btn" data-tab="settings">Ajustes</button>
-      <button id="logout-btn" class="btn-ghost">Salir</button>
-    </nav>
+    <aside id="sidebar">
+      <div class="side-logo">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1Z"/><path d="m10 10 4 2.5-4 2.5v-5Z" class="fill"/></svg>
+        <span>IPTV<b>Admin</b></span>
+      </div>
+      <nav class="side-nav">
+        <button class="nav-item active" data-tab="home">
+          <svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/><path d="M10 21v-6h4v6"/></svg>
+          <span>Inicio</span>
+        </button>
+        <button class="nav-item" data-tab="playlists">
+          <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1.2" class="fill"/><circle cx="4" cy="12" r="1.2" class="fill"/><circle cx="4" cy="18" r="1.2" class="fill"/></svg>
+          <span>Lista IPTV</span>
+        </button>
+        <button class="nav-item" data-tab="channels">
+          <svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="m8 2 4 5 4-5"/></svg>
+          <span>Canales</span>
+        </button>
+        <button class="nav-item" data-tab="rows">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/></svg>
+          <span>Filas</span>
+        </button>
+        <button class="nav-item" data-tab="epg">
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>
+          <span>Guía EPG</span>
+        </button>
+        <button class="nav-item" data-tab="logs">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
+          <span>Logs</span>
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <svg viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h2M10 16h10"/><circle cx="16" cy="8" r="2.5"/><circle cx="8" cy="16" r="2.5"/></svg>
+          <span>Ajustes</span>
+        </button>
+      </nav>
+      <button id="logout-btn" class="nav-item nav-logout">
+        <svg viewBox="0 0 24 24"><path d="M14 8V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-2"/><path d="M9 12h12m0 0-3-3m3 3-3 3"/></svg>
+        <span>Salir</span>
+      </button>
+    </aside>
 
     <main>
-      <!-- Home / setup guide tab -->
+      <!-- Home / dashboard -->
       <section id="tab-home" class="tab-pane">
-        <div class="pane-header">
-          <h2>Puesta en marcha</h2>
-          <p class="hint">Sigue estos pasos en orden. Cada paso se marca ✓ automáticamente cuando lo completas.</p>
-        </div>
+        <header class="page-head">
+          <div><h2>Inicio</h2><p class="page-sub">Resumen y puesta en marcha de tu addon</p></div>
+        </header>
+        <div id="home-stats" class="stats-row"></div>
+        <h3 class="section-label">Puesta en marcha</h3>
         <div id="setup-steps"></div>
         <div id="manifest-card"></div>
       </section>
 
-      <!-- Playlists tab -->
+      <!-- Playlists -->
       <section id="tab-playlists" class="tab-pane hidden">
-        <div class="pane-header">
-          <h2>Playlists M3U</h2>
-          <button class="btn" onclick="App.openAddPlaylist()">+ Añadir</button>
+        <header class="page-head">
+          <div><h2>Lista IPTV</h2><p class="page-sub">Tus listas M3U / Xtream y sus canales importados</p></div>
+          <button class="btn btn-grad" onclick="App.openAddPlaylist()">+ Añadir lista</button>
+        </header>
+        <div class="banner" data-hint="playlists">
+          <span>Añade la URL de tu proveedor (M3U o panel Xtream) y pulsa <b>↻ Refrescar</b> para importar sus canales. Los errores aparecen en la pestaña Logs.</span>
+          <button class="banner-x" onclick="App.dismissHint(this)">×</button>
         </div>
-        <p class="hint">Tu lista IPTV. Tras añadirla pulsa <b>↻ Refrescar</b> para importar sus canales.</p>
         <div id="playlists-list"></div>
       </section>
 
-      <!-- Channels tab -->
+      <!-- Channels -->
       <section id="tab-channels" class="tab-pane hidden">
-        <div class="pane-header">
-          <h2>Canales lógicos</h2>
-          <button class="btn" onclick="App.openAddChannel()">+ Nuevo canal</button>
+        <header class="page-head">
+          <div><h2>Canales</h2><p class="page-sub">Tus canales lógicos — cada uno agrupa varias fuentes de tu IPTV</p></div>
+          <button class="btn btn-grad" onclick="App.openAddChannel()">+ Nuevo canal</button>
+        </header>
+        <div class="banner" data-hint="channels">
+          <span>Pulsa cualquier canal para abrir su editor: datos, fuentes, guía EPG y filas, todo en un sitio.</span>
+          <button class="banner-x" onclick="App.dismissHint(this)">×</button>
         </div>
-        <p class="hint">Un canal lógico (ej. "M+ LaLiga") agrupa varios canales de tu IPTV como fuentes alternativas. En Stremio verás un solo canal con varias fuentes para elegir.</p>
         <input class="search-input" type="text" id="channel-search" placeholder="Buscar canal…" oninput="App.filterChannels(this.value)" />
         <div id="channels-list"></div>
       </section>
 
-      <!-- Rows tab -->
+      <!-- Rows -->
       <section id="tab-rows" class="tab-pane hidden">
-        <div class="pane-header">
-          <h2>Filas del addon</h2>
-          <button class="btn" onclick="App.openAddRow()">+ Nueva fila</button>
+        <header class="page-head">
+          <div><h2>Filas</h2><p class="page-sub">Las secciones que verás en Stremio/Nuvio, con previsualización real</p></div>
+          <button class="btn btn-grad" onclick="App.openAddRow()">+ Nueva fila</button>
+        </header>
+        <div class="banner" data-hint="rows">
+          <span>Pasa el ratón por una miniatura para reordenarla (‹ ›), ocultar el canal (ojo) o quitarlo de la fila (×). Haz clic en el nombre de una fila para renombrarla.</span>
+          <button class="banner-x" onclick="App.dismissHint(this)">×</button>
         </div>
-        <p class="hint">Cada fila es una sección en Stremio/Nuvio (Canales, Fútbol, Baloncesto, Motor…). Crea las que quieras y añade canales. La previsualización muestra cómo aparecerán.</p>
         <div id="rows-list"></div>
       </section>
 
-      <!-- EPG tab -->
+      <!-- EPG -->
       <section id="tab-epg" class="tab-pane hidden">
-        <div class="pane-header">
-          <h2>Fuentes EPG</h2>
-          <button class="btn" onclick="App.openAddEpg()">+ Añadir fuente</button>
+        <header class="page-head">
+          <div><h2>Guía EPG</h2><p class="page-sub">Programación, carátulas y emparejado con tus canales</p></div>
+          <button class="btn btn-grad" onclick="App.openAddEpg()">+ Añadir fuente</button>
+        </header>
+        <div class="banner" data-hint="epg">
+          <span>La guía dobleM (España) viene preconfigurada: pulsa <b>↻ Refrescar</b> para cargarla y luego <b>⚡ Auto-emparejar</b>. También puedes mapear cada canal desde su editor.</span>
+          <button class="banner-x" onclick="App.dismissHint(this)">×</button>
         </div>
-        <p class="hint">La guía de programación. La guía dobleM (España) ya viene configurada: pulsa <b>↻ Refrescar</b> para cargarla y después <b>Auto-emparejar</b> para conectarla con tus canales.</p>
         <div id="epg-sources-list"></div>
-        <div class="pane-header" style="margin-top:2rem">
-          <h2>Mapeo de canales EPG</h2>
+        <div class="page-head" style="margin-top:2rem">
+          <div><h3 class="section-label" style="margin:0">Canales emparejados</h3></div>
           <div style="display:flex;gap:.5rem">
             <button class="btn" onclick="App.autoMatchEpg()">⚡ Auto-emparejar</button>
             <button class="btn-ghost" onclick="App.openManualMap()">Mapear a mano</button>
@@ -94,53 +140,71 @@
         <div id="epg-map-list"></div>
       </section>
 
-      <!-- Logs tab -->
+      <!-- Logs -->
       <section id="tab-logs" class="tab-pane hidden">
-        <div class="pane-header">
-          <h2>Logs</h2>
-          <label class="log-autorefresh"><input type="checkbox" id="logs-auto" checked /> Auto-actualizar</label>
-          <button class="btn-ghost" onclick="App.loadLogs()">↻ Actualizar</button>
-        </div>
-        <p class="hint">Actividad del servidor: descargas de listas, EPG, peticiones de Stremio y errores.</p>
+        <header class="page-head">
+          <div><h2>Logs</h2><p class="page-sub">Actividad del servidor en tiempo real</p></div>
+          <div style="display:flex;gap:.8rem;align-items:center">
+            <label class="log-autorefresh"><input type="checkbox" id="logs-auto" checked /> Auto</label>
+            <button class="btn-ghost" onclick="App.loadLogs()">↻ Actualizar</button>
+          </div>
+        </header>
         <div id="logs-list" class="logs-box"></div>
       </section>
 
-      <!-- Settings tab -->
+      <!-- Settings -->
       <section id="tab-settings" class="tab-pane hidden">
-        <div class="pane-header"><h2>Ajustes</h2></div>
-        <form id="settings-form" class="settings-form" onsubmit="App.saveSettings(event)">
-          <label>Token del addon (cambia la URL de instalación) <input name="addon_token" /></label>
-          <label>Refresco automático de playlists (horas) <input name="playlist_refresh_hours" type="number" min="1" placeholder="6" /></label>
-          <label>Refresco automático de EPG (horas) <input name="epg_refresh_hours" type="number" min="1" placeholder="12" /></label>
-          <button type="submit" class="btn">Guardar</button>
-        </form>
+        <header class="page-head">
+          <div><h2>Ajustes</h2><p class="page-sub">Token, refrescos automáticos y formato de pósters</p></div>
+        </header>
 
-        <div class="settings-section" style="margin-top:1.8rem">
-          <h3 style="margin-bottom:.5rem;font-size:1rem">Orientación de pósters</h3>
-          <p class="hint">Controla cómo se muestran los canales en Stremio/Nuvio y qué guía EPG de dobleM se usa. Cambiarlo actualiza también la URL del EPG dobleM — pulsa <b>↻ Refrescar</b> en EPG tras el cambio.</p>
+        <div class="card-static">
+          <h3 class="section-label">General</h3>
+          <form id="settings-form" class="settings-form" onsubmit="App.saveSettings(event)">
+            <label>Token del addon (cambia la URL de instalación) <input name="addon_token" /></label>
+            <label>Refresco automático de playlists (horas) <input name="playlist_refresh_hours" type="number" min="1" placeholder="6" /></label>
+            <label>Refresco automático de EPG (horas) <input name="epg_refresh_hours" type="number" min="1" placeholder="12" /></label>
+            <button type="submit" class="btn btn-grad">Guardar</button>
+          </form>
+        </div>
+
+        <div class="card-static" style="margin-top:1.2rem">
+          <h3 class="section-label">Orientación de pósters</h3>
+          <p class="hint">Controla cómo se ven los canales en Stremio/Nuvio y qué guía dobleM se usa. Tras cambiar, pulsa <b>↻ Refrescar</b> en Guía EPG.</p>
           <div class="orientation-btns" id="orientation-btns">
             <button class="orient-btn" data-orient="landscape" onclick="App.switchOrientation('landscape')">
-              <span class="orient-icon">▬</span>
-              <span class="orient-label">Horizontal <b>(16:9)</b></span>
-              <span class="orient-hint">Fanart de partidos · guiafanart_color.xml.gz</span>
+              <span class="orient-shape orient-shape-h"></span>
+              <span class="orient-label">Horizontal <b>16:9</b></span>
+              <span class="orient-hint">Fanart de eventos en directo</span>
             </button>
             <button class="orient-btn" data-orient="portrait" onclick="App.switchOrientation('portrait')">
-              <span class="orient-icon">▮</span>
-              <span class="orient-label">Vertical <b>(2:3)</b></span>
-              <span class="orient-hint">Carátulas TV clásicas · guiatv_color.xml.gz</span>
+              <span class="orient-shape orient-shape-v"></span>
+              <span class="orient-label">Vertical <b>2:3</b></span>
+              <span class="orient-hint">Carátulas TV clásicas</span>
             </button>
           </div>
         </div>
 
-        <div id="status-panel" style="margin-top:2rem"></div>
+        <div id="status-panel" style="margin-top:1.2rem"></div>
       </section>
     </main>
   </div>
 
-  <!-- Modals -->
+  <!-- Modal -->
   <div id="modal-overlay" class="hidden">
     <div id="modal-box">
       <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <!-- Confirm dialog -->
+  <div id="confirm-overlay" class="hidden">
+    <div id="confirm-box">
+      <p id="confirm-msg"></p>
+      <div class="form-actions">
+        <button class="btn-ghost" id="confirm-no">Cancelar</button>
+        <button class="btn btn-danger-solid" id="confirm-yes">Eliminar</button>
+      </div>
     </div>
   </div>
 

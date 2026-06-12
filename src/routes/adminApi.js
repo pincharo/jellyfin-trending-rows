@@ -58,7 +58,13 @@ router.get('/raw-channels', (req, res) => {
 
 // ── Logical channels ────────────────────────────────────────────────────────
 router.get('/channels', (req, res) => {
-  const channels = db.prepare('SELECT * FROM logical_channels ORDER BY sort_order,name').all();
+  const channels = db.prepare(`
+    SELECT lc.*,
+      (SELECT COUNT(*) FROM channel_sources cs WHERE cs.logical_channel_id=lc.id) AS source_count,
+      (SELECT COUNT(*) FROM channel_rows cr WHERE cr.logical_channel_id=lc.id) AS row_count,
+      EXISTS(SELECT 1 FROM epg_channel_map m WHERE m.logical_channel_id=lc.id) AS has_epg
+    FROM logical_channels lc ORDER BY lc.sort_order, lc.name
+  `).all();
   res.json(channels);
 });
 
@@ -116,9 +122,21 @@ router.delete('/channels/:id/sources/:srcId', (req, res) => {
 });
 
 router.put('/channels/:id/sources/:srcId', (req, res) => {
+  const cur = db.prepare('SELECT * FROM channel_sources WHERE id=? AND logical_channel_id=?')
+    .get(req.params.srcId, req.params.id);
+  if (!cur) return res.status(404).json({ error: 'Fuente no encontrada' });
   const { priority, label } = req.body;
-  db.prepare('UPDATE channel_sources SET priority=?,label=? WHERE id=? AND logical_channel_id=?')
-    .run(priority ?? 0, label ?? '', req.params.srcId, req.params.id);
+  db.prepare('UPDATE channel_sources SET priority=?,label=? WHERE id=?')
+    .run(priority ?? cur.priority, label ?? cur.label, cur.id);
+  res.json({ ok: true });
+});
+
+// atomic reorder: array of source ids in the desired order → priority = index
+router.put('/channels/:id/sources-order', (req, res) => {
+  const { order } = req.body;
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order debe ser un array de ids' });
+  const upd = db.prepare('UPDATE channel_sources SET priority=? WHERE id=? AND logical_channel_id=?');
+  db.transaction(() => order.forEach((srcId, i) => upd.run(i, srcId, req.params.id)))();
   res.json({ ok: true });
 });
 
@@ -155,22 +173,34 @@ router.put('/rows/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// preview: exactly what the addon will serve for this row
+// preview: exactly what the addon will serve for this row, plus disabled
+// channels (dimmed in the UI — the addon itself skips them)
 router.get('/rows/:id/preview', (req, res) => {
   const row = db.prepare('SELECT * FROM rows WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'No encontrada' });
   const orientation = db.prepare("SELECT value FROM settings WHERE key='poster_orientation'").get()?.value || 'landscape';
-  const idBySlug = Object.fromEntries(
-    db.prepare('SELECT slug,id FROM logical_channels').all().map(r => [r.slug, r.id])
-  );
+
   const metas = channelsForRow(row.slug, 0, 100, { ignoreEnabled: true });
-  const channels = metas.map(m => {
-    const slug = m.id.replace('iptv:', '');
-    const generated = `/poster/channel/${slug}.webp`;
-    // Poster: if it's already a generated URL → use relative; if it's an external fanart URL → keep it
-    // (catalog.js already picks generated-only for portrait mode)
-    const poster = m.poster.includes('/poster/channel/') ? generated : m.poster;
-    return { id: idBySlug[slug], slug, name: m.name, poster, fallback: generated };
+  const metaBySlug = Object.fromEntries(metas.map(m => [m.id.replace('iptv:', ''), m]));
+
+  const all = db.prepare(`
+    SELECT lc.id, lc.slug, lc.name, lc.enabled
+    FROM channel_rows cr JOIN logical_channels lc ON lc.id=cr.logical_channel_id
+    WHERE cr.row_id=? ORDER BY cr.sort_order, lc.sort_order
+  `).all(row.id);
+
+  const channels = all.map(c => {
+    const generated = `/poster/channel/${c.slug}.webp`;
+    const m = metaBySlug[c.slug];
+    const poster = m && !m.poster.includes('/poster/channel/') ? m.poster : generated;
+    return {
+      id: c.id,
+      slug: c.slug,
+      name: m?.name || c.name,
+      poster,
+      fallback: generated,
+      enabled: !!c.enabled,
+    };
   });
   res.json({ orientation, channels });
 });
@@ -197,6 +227,15 @@ router.post('/rows/:id/channels', (req, res) => {
 
 router.delete('/rows/:id/channels/:chId', (req, res) => {
   db.prepare('DELETE FROM channel_rows WHERE row_id=? AND logical_channel_id=?').run(req.params.id, req.params.chId);
+  res.json({ ok: true });
+});
+
+// atomic reorder: array of logical_channel_ids in the desired order → sort_order = index
+router.put('/rows/:id/channels-order', (req, res) => {
+  const { order } = req.body;
+  if (!Array.isArray(order)) return res.status(400).json({ error: 'order debe ser un array de ids' });
+  const upd = db.prepare('UPDATE channel_rows SET sort_order=? WHERE row_id=? AND logical_channel_id=?');
+  db.transaction(() => order.forEach((chId, i) => upd.run(i, req.params.id, chId)))();
   res.json({ ok: true });
 });
 

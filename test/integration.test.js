@@ -172,3 +172,79 @@ test('EPG mapping enriches catalog description', async () => {
   // Channel logo lives in the logo field (EPG icon fallback)
   assert.equal(cat.metas[0].logo, 'https://logos.example/laliga.png');
 });
+
+test('channel list includes counts and editor badges data', async () => {
+  const list = await (await fetch(`${baseUrl}/api/admin/channels`, { headers: { cookie } })).json();
+  const ch = list.find(c => c.name === 'M+ LaLiga');
+  assert.equal(ch.source_count, 1);
+  assert.equal(ch.row_count, 1);
+  assert.equal(ch.has_epg, 1);
+});
+
+test('row channel reorder and disabled channels in preview', async () => {
+  const headers = { cookie, 'Content-Type': 'application/json' };
+  const futbolRow = db.prepare("SELECT id FROM rows WHERE slug='futbol'").get();
+  const first = db.prepare("SELECT id FROM logical_channels WHERE name='M+ LaLiga'").get();
+
+  // add a second channel to the row
+  const ch2 = await (await fetch(`${baseUrl}/api/admin/channels`, {
+    method: 'POST', headers, body: JSON.stringify({ name: 'DAZN LaLiga' }),
+  })).json();
+  await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}/channels`, {
+    method: 'POST', headers, body: JSON.stringify({ logical_channel_id: ch2.id }),
+  });
+
+  // reorder: DAZN first
+  const reorder = await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}/channels-order`, {
+    method: 'PUT', headers, body: JSON.stringify({ order: [ch2.id, first.id] }),
+  });
+  assert.equal(reorder.status, 200);
+
+  let prev = await (await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}/preview`, { headers })).json();
+  assert.equal(prev.channels[0].id, ch2.id);
+  assert.equal(prev.channels[1].id, first.id);
+  assert.equal(prev.channels[0].enabled, true);
+
+  // disable the first channel → still listed in preview, marked disabled, gone from catalog
+  await fetch(`${baseUrl}/api/admin/channels/${ch2.id}`, {
+    method: 'PUT', headers, body: JSON.stringify({ enabled: 0 }),
+  });
+  prev = await (await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}/preview`, { headers })).json();
+  const disabled = prev.channels.find(c => c.id === ch2.id);
+  assert.equal(disabled.enabled, false);
+  assert.match(disabled.poster, /^\/poster\/channel\//);
+
+  const cat = await (await fetch(`${baseUrl}/test-token/catalog/tv/iptv_futbol.json`)).json();
+  assert.ok(!cat.metas.some(m => m.id === `iptv:${ch2.slug}`));
+
+  // re-enable for any later assertions
+  await fetch(`${baseUrl}/api/admin/channels/${ch2.id}`, {
+    method: 'PUT', headers, body: JSON.stringify({ enabled: 1 }),
+  });
+});
+
+test('source reorder endpoint swaps priorities atomically', async () => {
+  const headers = { cookie, 'Content-Type': 'application/json' };
+  const ch = db.prepare("SELECT id FROM logical_channels WHERE name='M+ LaLiga'").get();
+  const plId = db.prepare('SELECT id FROM playlists ORDER BY id LIMIT 1').get().id;
+
+  db.prepare(`INSERT INTO raw_channels(playlist_id,tvg_id,tvg_name,tvg_logo,group_title,stream_url)
+    VALUES(?,?,?,?,?,?)`).run(plId, '', 'M+ LaLiga 2 FHD', '', 'DEPORTES', 'http://test/stream/1002');
+  const raw2 = db.prepare('SELECT id FROM raw_channels ORDER BY id DESC LIMIT 1').get().id;
+  await fetch(`${baseUrl}/api/admin/channels/${ch.id}/sources`, {
+    method: 'POST', headers, body: JSON.stringify({ raw_channel_id: raw2 }),
+  });
+
+  const sources = await (await fetch(`${baseUrl}/api/admin/channels/${ch.id}/sources`, { headers })).json();
+  assert.equal(sources.length, 2);
+
+  // reverse the order
+  const reversed = sources.map(s => s.id).reverse();
+  const r = await fetch(`${baseUrl}/api/admin/channels/${ch.id}/sources-order`, {
+    method: 'PUT', headers, body: JSON.stringify({ order: reversed }),
+  });
+  assert.equal(r.status, 200);
+
+  const after = await (await fetch(`${baseUrl}/api/admin/channels/${ch.id}/sources`, { headers })).json();
+  assert.deepEqual(after.map(s => s.id), reversed);
+});
