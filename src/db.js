@@ -10,7 +10,7 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
@@ -150,6 +150,15 @@ if (currentVersion < 3) {
   try { db.exec("ALTER TABLE channel_rows ADD COLUMN custom_poster TEXT DEFAULT ''"); } catch {}
   try { db.exec("ALTER TABLE channel_rows ADD COLUMN custom_name TEXT DEFAULT ''"); } catch {}
   db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('schema_version','3')").run();
+}
+
+if (currentVersion < 4) {
+  // Switch default landscape EPG to guiafanart_color1 (title-only, no sub-title noise)
+  db.prepare("UPDATE epg_sources SET url=? WHERE url=?").run(
+    'https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiafanart_color1.xml.gz',
+    'https://raw.githubusercontent.com/davidmuma/EPG_dobleM/master/guiafanart_color.xml.gz'
+  );
+  db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('schema_version','4')").run();
 }
 
 export default db;
