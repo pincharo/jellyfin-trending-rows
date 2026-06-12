@@ -145,9 +145,10 @@ test('EPG mapping enriches catalog description', async () => {
     .run(epgSourceId, 'M+ LaLiga HD', 'M+ LaLiga', 'https://logos.example/laliga.png');
 
   const now = Math.floor(Date.now() / 1000);
-  db.prepare(`INSERT INTO programmes(epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories)
-    VALUES(?,?,?,?,?,?,?,?)`)
-    .run(epgSourceId, 'M+ LaLiga HD', now - 1800, now + 5400, 'Real Madrid vs Barcelona', '', '', '["deportes","fútbol"]');
+  db.prepare(`INSERT INTO programmes(epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories,icon)
+    VALUES(?,?,?,?,?,?,?,?,?)`)
+    .run(epgSourceId, 'M+ LaLiga HD', now - 1800, now + 5400, 'Real Madrid vs Barcelona', '', '', '["deportes","fútbol"]',
+      'https://fanart.example/clasico.jpg');
 
   // Auto-match should link "M+ LaLiga" logical channel to "M+ LaLiga HD" EPG channel
   const match = await fetch(`${baseUrl}/api/admin/epg-map/auto-match`, { method: 'POST', headers });
@@ -163,6 +164,11 @@ test('EPG mapping enriches catalog description', async () => {
   // Catalog should now show the current programme
   const cat = await (await fetch(`${baseUrl}/test-token/catalog/tv/iptv_futbol.json`)).json();
   assert.match(cat.metas[0].description, /Ahora: Real Madrid vs Barcelona/);
-  // And fall back to the EPG icon as poster
-  assert.equal(cat.metas[0].poster, 'https://logos.example/laliga.png');
+  // Live programme: name becomes "evento — canal" and its fanart is the landscape poster/background
+  assert.equal(cat.metas[0].name, 'Real Madrid vs Barcelona — M+ LaLiga');
+  assert.equal(cat.metas[0].poster, 'https://fanart.example/clasico.jpg');
+  assert.equal(cat.metas[0].background, 'https://fanart.example/clasico.jpg');
+  assert.equal(cat.metas[0].posterShape, 'landscape');
+  // Channel logo lives in the logo field (EPG icon fallback)
+  assert.equal(cat.metas[0].logo, 'https://logos.example/laliga.png');
 });

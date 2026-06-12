@@ -59,15 +59,17 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100) {
     const channelIcon = ch.logo_url || (map ? getEpgChannelIcon(map.epg_channel_id, map.epg_source_id) : '');
     const prog = map ? currentProgramme(map.epg_channel_id, map.epg_source_id) : null;
     const fanart = prog?.icon || '';
+    // generated landscape art keeps every row a uniform shape when there's no fanart
+    const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
     return {
       id: `iptv:${ch.slug}`,
       type: 'tv',
-      name: ch.name,
-      poster: fanart || channelIcon || `${BASE_URL}/placeholder.png`,
-      posterShape: fanart ? 'landscape' : 'square',
+      name: prog ? `${prog.title} — ${ch.name}` : ch.name,
+      poster: fanart || generated,
+      posterShape: 'landscape',
       logo: channelIcon || undefined,
       description: desc,
-      background: fanart || channelIcon || undefined,
+      background: fanart || generated,
     };
   });
 }
@@ -103,6 +105,7 @@ export function channelMeta(slug) {
 
   const currentProg = map ? currentProgramme(map.epg_channel_id, map.epg_source_id) : null;
   const fanart = currentProg?.icon || '';
+  const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
   const desc = currentProg
     ? `Ahora: ${currentProg.title} (${formatTime(currentProg.start, TZ)}–${formatTime(currentProg.stop, TZ)})${schedule}`
     : ch.name + schedule;
@@ -110,11 +113,11 @@ export function channelMeta(slug) {
   return {
     id: `iptv:${ch.slug}`,
     type: 'tv',
-    name: ch.name,
-    poster: fanart || icon,
-    posterShape: fanart ? 'landscape' : 'square',
+    name: currentProg ? `${currentProg.title} — ${ch.name}` : ch.name,
+    poster: fanart || generated,
+    posterShape: 'landscape',
     logo: icon || undefined,
-    background: fanart || icon,
+    background: fanart || generated,
     description: desc,
   };
 }
