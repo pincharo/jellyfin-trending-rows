@@ -56,6 +56,7 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled =
   `).all(row.id, limit, skip);
 
   const posterShape = getPosterShape();
+  const isPortrait = posterShape === 'poster';
   return channels.map(ch => {
     const map = epgMap(ch.id);
     const desc = buildDescription(ch, map);
@@ -63,11 +64,13 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled =
     const prog = map ? currentProgramme(map.epg_channel_id, map.epg_source_id) : null;
     const fanart = prog?.icon || '';
     const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
+    // Portrait mode: always use the generated portrait poster (fanart is landscape-shaped).
+    // Background keeps the fanart because Nuvio stretches it behind the detail view anyway.
     return {
       id: `iptv:${ch.slug}`,
       type: 'tv',
       name: prog ? `${prog.title} — ${ch.name}` : ch.name,
-      poster: fanart || generated,
+      poster: isPortrait ? generated : (fanart || generated),
       posterShape,
       logo: channelIcon || undefined,
       description: desc,
@@ -117,12 +120,13 @@ export function channelMeta(slug) {
     ? `Ahora: ${currentProg.title} (${formatTime(currentProg.start, TZ)}–${formatTime(currentProg.stop, TZ)})${schedule}`
     : ch.name + schedule;
 
+  const shape = getPosterShape();
   return {
     id: `iptv:${ch.slug}`,
     type: 'tv',
     name: currentProg ? `${currentProg.title} — ${ch.name}` : ch.name,
-    poster: fanart || generated,
-    posterShape: getPosterShape(),
+    poster: shape === 'poster' ? generated : (fanart || generated),
+    posterShape: shape,
     logo: icon || undefined,
     background: fanart || generated,
     description: desc,

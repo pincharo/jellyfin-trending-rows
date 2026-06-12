@@ -155,22 +155,24 @@ router.put('/rows/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-// preview: exactly what the addon will serve for this row (fanart / generated poster)
+// preview: exactly what the addon will serve for this row
 router.get('/rows/:id/preview', (req, res) => {
   const row = db.prepare('SELECT * FROM rows WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'No encontrada' });
+  const orientation = db.prepare("SELECT value FROM settings WHERE key='poster_orientation'").get()?.value || 'landscape';
   const idBySlug = Object.fromEntries(
     db.prepare('SELECT slug,id FROM logical_channels').all().map(r => [r.slug, r.id])
   );
   const metas = channelsForRow(row.slug, 0, 100, { ignoreEnabled: true });
-  res.json(metas.map(m => {
+  const channels = metas.map(m => {
     const slug = m.id.replace('iptv:', '');
-    // generated posters: serve relative so the admin works on any host, not just BASE_URL
-    const poster = m.poster.includes('/poster/channel/')
-      ? `/poster/channel/${slug}.webp`
-      : m.poster;
-    return { id: idBySlug[slug], name: m.name, poster };
-  }));
+    const generated = `/poster/channel/${slug}.webp`;
+    // Poster: if it's already a generated URL → use relative; if it's an external fanart URL → keep it
+    // (catalog.js already picks generated-only for portrait mode)
+    const poster = m.poster.includes('/poster/channel/') ? generated : m.poster;
+    return { id: idBySlug[slug], slug, name: m.name, poster, fallback: generated };
+  });
+  res.json({ orientation, channels });
 });
 
 // channels in a row

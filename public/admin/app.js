@@ -528,10 +528,10 @@ const App = {
     const rows = await api('GET', '/rows');
     const el = $('rows-list');
     const sections = await Promise.all(rows.map(async r => {
-      const chs = await api('GET', `/rows/${r.id}/preview`);
-      return { row: r, channels: chs };
+      const { orientation, channels } = await api('GET', `/rows/${r.id}/preview`);
+      return { row: r, channels, orientation };
     }));
-    el.innerHTML = sections.map(({ row, channels }) => `
+    el.innerHTML = sections.map(({ row, channels, orientation }) => `
       <div class="card row-card">
         <div class="row-card-head">
           <div class="card-body">
@@ -549,9 +549,10 @@ const App = {
         ${channels.length ? `
           <div class="row-preview" title="Previsualización — así aparecerá en Stremio/Nuvio">
             ${channels.map(c => `
-              <div class="row-preview-card">
-                <div class="row-preview-img">
-                  <img src="${esc(c.poster)}" loading="lazy" onerror="this.className='rp-placeholder'" />
+              <div class="row-preview-card row-preview-${orientation}">
+                <div class="row-preview-img row-preview-img-${orientation}">
+                  <img src="${esc(c.poster)}" loading="lazy"
+                    onerror="if(this.getAttribute('data-fb')){this.className='rp-placeholder';this.removeAttribute('data-fb');}else{this.setAttribute('data-fb','1');this.src='${escAttr(c.fallback)}'}" />
                 </div>
                 <div class="row-preview-name" title="${esc(c.name)}">${esc(c.name)}</div>
                 <button class="row-preview-remove" onclick="App.removeFromRow(${row.id},${c.id})" title="Quitar">×</button>
