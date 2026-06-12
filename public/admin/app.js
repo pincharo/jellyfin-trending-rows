@@ -921,7 +921,12 @@ const App = {
       <p class="hint" style="margin-bottom:1rem">Estos valores solo afectan a <b>${esc(channelName)}</b> <em>dentro de esta fila</em> y son <b>fijos</b>: no cambian con la programación del EPG. El canal sigue igual en las demás filas.</p>
       <div class="form-group">
         <label>Poster custom para esta fila (URL)</label>
-        <input id="rc-poster" value="${esc(customPoster)}" placeholder="https://… (vacío = según el modo de la fila)" />
+        <input id="rc-poster" value="${esc(customPoster)}" placeholder="https://… (vacío = según el modo de la fila)"
+          oninput="App._previewPosterUrl(this.value)" />
+        <div id="rc-poster-preview" style="margin-top:.6rem;min-height:48px">
+          ${customPoster ? `<img src="${esc(customPoster)}" style="max-height:90px;max-width:100%;border-radius:6px;border:1px solid var(--border)"
+            onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'hint',style:'color:var(--err,#f87171)',textContent:'⚠ La URL no carga como imagen (CORS, acceso restringido o URL incorrecta)'}))" />` : ''}
+        </div>
       </div>
       <div class="form-group">
         <label>Nombre custom para esta fila</label>
@@ -933,6 +938,14 @@ const App = {
         <button class="btn btn-grad" onclick="App.saveRowChannelCustom(${rowId},${chId})">Guardar</button>
       </div>
     `);
+  },
+
+  _previewPosterUrl(url) {
+    const el = $('rc-poster-preview');
+    if (!el) return;
+    if (!url.trim()) { el.innerHTML = ''; return; }
+    el.innerHTML = `<img src="${esc(url)}" style="max-height:90px;max-width:100%;border-radius:6px;border:1px solid var(--border)"
+      onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'hint',style:'color:var(--err,#f87171)',textContent:'⚠ La URL no carga como imagen (CORS, acceso restringido o URL incorrecta)'}))" />`;
   },
 
   async saveRowChannelCustom(rowId, chId) {

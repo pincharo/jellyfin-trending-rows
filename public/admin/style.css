@@ -354,7 +354,8 @@ input::placeholder { color: var(--text2); }
 .row-preview-card.row-preview-portrait { width: 112px; }
 .row-preview-img.row-preview-img-portrait { width: 112px; height: 168px; }
 .row-preview-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.rp-placeholder { width: 100%; height: 100%; background: var(--bg); }
+.rp-placeholder { width: 100%; height: 100%; background: linear-gradient(135deg,#1a1d2e,#0d1120); display:flex; align-items:center; justify-content:center; font-size:.65rem; color:rgba(255,255,255,.3); }
+.rp-placeholder::after { content: "Sin imagen"; }
 
 .row-preview-card.rp-off .row-preview-img { opacity: .38; }
 .row-preview-card.rp-custom { box-shadow: 0 0 0 2px var(--accent); border-radius: 12px; }
