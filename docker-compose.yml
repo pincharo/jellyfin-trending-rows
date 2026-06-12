@@ -3,11 +3,11 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "7000:7000"
+      - "${PORT:-7000}:${PORT:-7000}"
     volumes:
       - ./data:/data
     environment:
-      - PORT=7000
+      - PORT=${PORT:-7000}
       - DATA_DIR=/data
       - BASE_URL=${BASE_URL:-http://localhost:7000}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
