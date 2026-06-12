@@ -1113,6 +1113,16 @@ const App = {
     if (btn) btn.disabled = false;
   },
 
+  async clearPosterCache() {
+    const btn = document.querySelector('[onclick="App.clearPosterCache()"]');
+    if (btn) { btn.disabled = true; btn.textContent = 'Limpiando…'; }
+    try {
+      const r = await api('POST', '/settings/clear-poster-cache');
+      toast(`Caché de pósters limpiada (${r.deleted} archivo${r.deleted !== 1 ? 's' : ''} eliminado${r.deleted !== 1 ? 's' : ''})`, 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+    if (btn) { btn.disabled = false; btn.textContent = '🗑 Limpiar caché de pósters'; }
+  },
+
   async saveSettings(e) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));

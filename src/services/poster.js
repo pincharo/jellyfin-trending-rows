@@ -8,13 +8,54 @@ import { logWarn } from '../util/logger.js';
 
 const POSTER_DIR = join(DATA_DIR, 'posters');
 
+// bump this when the generation algorithm changes to invalidate stale cache files
+const CACHE_V = 3;
+
 // landscape = 16:9 for fanart/sports rows; portrait = 2:3 for classic TV grid
 const DIMS = {
   landscape: { w: 800, h: 450 },
   portrait:  { w: 400, h: 600 },
 };
 
-const BG = { r: 13, g: 17, b: 35, alpha: 1 }; // dark navy — no SVG/librsvg needed
+const BG = { r: 13, g: 17, b: 35 };
+
+// Derive a unique hue (0-359) from a slug so each channel gets a different accent
+function slugHue(slug) {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) & 0xffff;
+  return h % 360;
+}
+
+// HSL → RGB (all inputs 0-360/0-100/0-100, output 0-255 ints)
+function hslToRgb(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => {
+    const k = (n + h / 30) % 12;
+    return Math.round((l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)) * 255);
+  };
+  return [f(0), f(8), f(4)];
+}
+
+// Build a raw RGBA buffer with a radial gradient: accent colour at centre → BG at edges.
+// Gives each channel a subtly distinctive look even without a logo.
+function makeGradientBg(w, h, hue) {
+  const [ar, ag, ab] = hslToRgb(hue, 55, 14); // dark saturated accent
+  const cx = w / 2, cy = h / 2;
+  const maxD = Math.sqrt(cx * cx + cy * cy);
+  const buf = Buffer.alloc(w * h * 4);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const t = Math.min(1, Math.sqrt((x - cx) ** 2 + (y - cy) ** 2) / maxD * 1.25);
+      const idx = (y * w + x) * 4;
+      buf[idx]   = Math.round(ar * (1 - t) + BG.r * t);
+      buf[idx+1] = Math.round(ag * (1 - t) + BG.g * t);
+      buf[idx+2] = Math.round(ab * (1 - t) + BG.b * t);
+      buf[idx+3] = 255;
+    }
+  }
+  return buf;
+}
 
 function findChannelLogo(ch) {
   if (ch.logo_url) return ch.logo_url;
@@ -34,8 +75,9 @@ function findChannelLogo(ch) {
 
 /**
  * Returns a WebP poster for a logical channel, sized for the given orientation.
- * The square channel logo is composited on a dark background — no SVG/librsvg needed.
- * Results are disk-cached keyed by (slug, logo url, orientation).
+ * - Logo is composited centred on a channel-unique radial-gradient background.
+ * - SVG logos are skipped (sharp needs librsvg to render them, not available in prebuilts).
+ * - Results are disk-cached; CACHE_V in the key invalidates stale files.
  */
 export async function channelPoster(slug, orientation = 'landscape') {
   const { w, h } = DIMS[orientation] || DIMS.landscape;
@@ -44,24 +86,32 @@ export async function channelPoster(slug, orientation = 'landscape') {
 
   const logo = findChannelLogo(ch);
   await mkdir(POSTER_DIR, { recursive: true });
-  const cacheFile = join(POSTER_DIR, `ch_${sha1hex(`${slug}|${logo}|${orientation}`)}.webp`);
-  try { return await readFile(cacheFile); } catch {}
+  const cacheFile = join(POSTER_DIR, `ch_v${CACHE_V}_${sha1hex(`${slug}|${logo}|${orientation}`)}.webp`);
+  try {
+    const cached = await readFile(cacheFile);
+    if (cached.length > 100) return cached;
+  } catch {}
+
+  const hue = slugHue(slug);
+  const gradBuf = makeGradientBg(w, h, hue);
+  const base = sharp(gradBuf, { raw: { width: w, height: h, channels: 4 } });
 
   let logoBuf = null;
   if (logo) {
     try {
       const res = await fetchWithTimeout(logo, {}, 10000);
       const type = res.headers.get('content-type') || '';
-      if (res.ok && (type.startsWith('image') || type === 'application/octet-stream')) {
+      // SVG requires librsvg which isn't in sharp's prebuilt binaries — skip silently
+      const isSvg = type.includes('svg') || logo.toLowerCase().endsWith('.svg');
+      if (res.ok && !isSvg && (type.startsWith('image') || type === 'application/octet-stream')) {
         logoBuf = Buffer.from(await res.arrayBuffer());
+      } else if (isSvg) {
+        logWarn(`Póster "${slug}": logo SVG omitido — no puede procesarse sin librsvg`);
       }
     } catch (err) {
       logWarn(`Póster "${slug}": no se pudo descargar el logo (${err.message})`);
     }
   }
-
-  // Solid-color background via sharp.create — works on all platforms without librsvg
-  const base = sharp({ create: { width: w, height: h, channels: 4, background: BG } });
 
   if (logoBuf) {
     try {
@@ -81,11 +131,11 @@ export async function channelPoster(slug, orientation = 'landscape') {
       writeFile(cacheFile, out).catch(() => {});
       return out;
     } catch (err) {
-      logWarn(`Póster "${slug}": error procesando logo (${err.message}), usando fondo plano`);
+      logWarn(`Póster "${slug}": error al procesar logo (${err.message}), usando fondo degradado`);
     }
   }
 
-  // Fallback: plain dark background (still beats a broken image)
+  // No logo or logo processing failed — return the gradient background alone
   const out = await base.webp({ quality: 82 }).toBuffer();
   writeFile(cacheFile, out).catch(() => {});
   return out;

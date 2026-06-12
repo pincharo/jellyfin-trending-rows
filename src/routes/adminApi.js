@@ -331,6 +331,24 @@ router.post('/settings', (req, res) => {
   res.json({ ok: true });
 });
 
+// delete all cached poster files so they regenerate on next request
+router.post('/settings/clear-poster-cache', async (req, res) => {
+  try {
+    const { DATA_DIR } = await import('../config.js');
+    const { join } = await import('node:path');
+    const { readdir, unlink } = await import('node:fs/promises');
+    const dir = join(DATA_DIR, 'posters');
+    let deleted = 0;
+    try {
+      const files = await readdir(dir);
+      await Promise.all(files.filter(f => f.endsWith('.webp')).map(f => unlink(join(dir, f)).then(() => { deleted++; }).catch(() => {})));
+    } catch {}
+    res.json({ ok: true, deleted });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // convenience: swap the dobleM EPG source URL and set orientation in one shot
 router.post('/settings/switch-orientation', (req, res) => {
   const { orientation } = req.body;
