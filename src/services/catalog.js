@@ -4,6 +4,10 @@ import { formatTime, formatDate } from '../util/index.js';
 
 const TZ = 'Europe/Madrid';
 
+// guiafanart_color1 prefixes titles with "Lunes 2 junio " — strip it
+const DATE_PREFIX_RE = /^(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+\d{1,2}\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+/i;
+function cleanTitle(t) { return t ? t.replace(DATE_PREFIX_RE, '').trim() : t; }
+
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
 function currentProgramme(epgChannelId, epgSourceId) {
@@ -37,7 +41,7 @@ function buildDescription(ch, map) {
   if (!map) return ch.name;
   const prog = currentProgramme(map.epg_channel_id, map.epg_source_id);
   if (!prog) return ch.name;
-  return `Ahora: ${prog.title} (${formatTime(prog.start, TZ)}–${formatTime(prog.stop, TZ)})`;
+  return `Ahora: ${cleanTitle(prog.title)} (${formatTime(prog.start, TZ)}–${formatTime(prog.stop, TZ)})`;
 }
 
 export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled = false } = {}) {
@@ -69,7 +73,7 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled =
     const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
 
     // Name: per-row custom_name wins, then mode determines the default
-    const name = ch.custom_name || (isCanal ? ch.name : (prog ? `${prog.title} — ${ch.name}` : ch.name));
+    const name = ch.custom_name || (isCanal ? ch.name : (prog ? `${cleanTitle(prog.title)} — ${ch.name}` : ch.name));
 
     // Poster: per-row custom_poster wins, then mode determines the default
     let poster;
@@ -133,14 +137,14 @@ export function channelMeta(slug) {
   const fanart = currentProg?.icon || '';
   const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
   const desc = currentProg
-    ? `Ahora: ${currentProg.title} (${formatTime(currentProg.start, TZ)}–${formatTime(currentProg.stop, TZ)})${schedule}`
+    ? `Ahora: ${cleanTitle(currentProg.title)} (${formatTime(currentProg.start, TZ)}–${formatTime(currentProg.stop, TZ)})${schedule}`
     : ch.name + schedule;
 
   const shape = getPosterShape();
   return {
     id: `iptv:${ch.slug}`,
     type: 'tv',
-    name: currentProg ? `${currentProg.title} — ${ch.name}` : ch.name,
+    name: currentProg ? `${cleanTitle(currentProg.title)} — ${ch.name}` : ch.name,
     poster: shape === 'poster' ? generated : (fanart || generated),
     posterShape: shape,
     logo: icon || undefined,
