@@ -325,3 +325,68 @@ test('custom_name in epg mode overrides programme title, row mode reverts to epg
   assert.equal(entry2.name, 'Real Madrid vs Barcelona — M+ LaLiga');
   assert.equal(entry2.poster, 'https://fanart.example/clasico.jpg');
 });
+
+test('show_events: DIRECTO programmes appear as event tiles in catalog', async () => {
+  const headers = { cookie, 'Content-Type': 'application/json' };
+  const futbolRow = db.prepare("SELECT id FROM rows WHERE slug='futbol'").get();
+  const epgSourceId = db.prepare('SELECT id FROM epg_sources LIMIT 1').get().id;
+  const now = Math.floor(Date.now() / 1000);
+
+  // Insert: live DIRECTO event (in progress)
+  const liveStart = now - 600;
+  db.prepare(`INSERT OR IGNORE INTO programmes(epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories,icon)
+    VALUES(?,?,?,?,?,?,?,?,?)`)
+    .run(epgSourceId, 'M+ LaLiga HD', liveStart, now + 3600, '🔴 DIRECTO Grupo B: Test en Vivo', '', '', '[]', 'https://fanart.example/live.jpg');
+
+  // Insert: upcoming DIRECTO event (2h from now)
+  const futureStart = now + 7200;
+  db.prepare(`INSERT OR IGNORE INTO programmes(epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories,icon)
+    VALUES(?,?,?,?,?,?,?,?,?)`)
+    .run(epgSourceId, 'M+ LaLiga HD', futureStart, now + 10800, '🔴 DIRECTO Grupo D: Partido Futuro', '', '', '[]', '');
+
+  // Insert: normal programme without DIRECTO marker (should NOT appear as event tile)
+  db.prepare(`INSERT OR IGNORE INTO programmes(epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories,icon)
+    VALUES(?,?,?,?,?,?,?,?,?)`)
+    .run(epgSourceId, 'M+ LaLiga HD', now + 11000, now + 14400, 'Documental: Historia del Fútbol', '', '', '[]', '');
+
+  // Enable show_events on the fútbol row
+  const r = await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}`, {
+    method: 'PUT', headers, body: JSON.stringify({ show_events: 1 }),
+  });
+  assert.equal(r.status, 200);
+
+  // Catalog should include 2 extra event tiles
+  const cat = await (await fetch(`${baseUrl}/test-token/catalog/tv/iptv_futbol.json`)).json();
+  const eventMetas = cat.metas.filter(m => m.id.includes(':ev:'));
+  assert.equal(eventMetas.length, 2, 'should have 2 event tiles');
+
+  // Live event tile has 🔴 LIVE prefix and correct ID
+  const liveEvent = eventMetas.find(m => m.name.startsWith('🔴 LIVE'));
+  assert.ok(liveEvent, 'live event tile should exist');
+  assert.equal(liveEvent.id, `iptv:${db.prepare("SELECT slug FROM logical_channels WHERE name='M+ LaLiga'").get().slug}:ev:${liveStart}`);
+  assert.equal(liveEvent.poster, 'https://fanart.example/live.jpg');
+
+  // Future event tile has Próximamente prefix
+  const futureEvent = eventMetas.find(m => m.name.startsWith('Próximamente'));
+  assert.ok(futureEvent, 'future event tile should exist');
+  assert.ok(futureEvent.name.includes('Partido Futuro'), 'title should have DIRECTO stripped');
+
+  // Normal programme does NOT appear as event tile
+  assert.ok(!cat.metas.some(m => m.id.includes(':ev:') && m.name.includes('Documental')));
+
+  // meta endpoint resolves for event ID
+  const metaRes = await (await fetch(`${baseUrl}/test-token/meta/tv/${liveEvent.id}.json`)).json();
+  assert.ok(metaRes.meta, 'event meta should resolve');
+  assert.ok(metaRes.meta.name.startsWith('🔴 LIVE'));
+
+  // stream endpoint returns the underlying channel streams
+  const streamRes = await (await fetch(`${baseUrl}/test-token/stream/tv/${liveEvent.id}.json`)).json();
+  assert.ok(streamRes.streams.length > 0, 'event stream should resolve to channel streams');
+
+  // Disabling show_events removes event tiles from catalog
+  await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}`, {
+    method: 'PUT', headers, body: JSON.stringify({ show_events: 0 }),
+  });
+  const cat2 = await (await fetch(`${baseUrl}/test-token/catalog/tv/iptv_futbol.json`)).json();
+  assert.ok(!cat2.metas.some(m => m.id.includes(':ev:')), 'event tiles should disappear when show_events=0');
+});

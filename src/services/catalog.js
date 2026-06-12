@@ -8,6 +8,15 @@ const TZ = 'Europe/Madrid';
 const DATE_PREFIX_RE = /^(?:lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\s+\d{1,2}\s+(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\s+/i;
 function cleanTitle(t) { return t ? t.replace(DATE_PREFIX_RE, '').trim() : t; }
 
+// matches "🔴 DIRECTO Grupo B: Canadá - Bosnia" style titles from dobleM EPG
+const LIVE_EVENT_RE = /🔴|\bDIRECTO\b/i;
+
+// removes the live marker prefix so "🔴 DIRECTO Grupo B" → "Grupo B"
+function stripLiveMarker(t) {
+  if (!t) return t;
+  return t.replace(/^🔴\s*/u, '').replace(/^DIRECTO\s*/i, '').trim();
+}
+
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
 function currentProgramme(epgChannelId, epgSourceId) {
@@ -44,10 +53,57 @@ function buildDescription(ch, map) {
   return `Ahora: ${cleanTitle(prog.title)} (${formatTime(prog.start, TZ)}–${formatTime(prog.stop, TZ)})`;
 }
 
+// Builds event tiles for programmes matching LIVE_EVENT_RE in the next 24h
+function eventsForRow(rowId) {
+  const now = nowSec();
+  const rows = db.prepare(`
+    SELECT p.title, p.start, p.stop, p.icon,
+           lc.slug, lc.name AS ch_name, lc.logo_url,
+           m.epg_channel_id, m.epg_source_id
+    FROM programmes p
+    JOIN epg_channel_map m
+      ON m.epg_channel_id=p.epg_channel_id AND m.epg_source_id=p.epg_source_id
+    JOIN logical_channels lc ON lc.id=m.logical_channel_id
+    JOIN channel_rows cr ON cr.logical_channel_id=lc.id
+    WHERE cr.row_id=? AND lc.enabled=1 AND p.stop>? AND p.start<?
+    ORDER BY p.start ASC
+  `).all(rowId, now, now + 86400);
+
+  const posterShape = getPosterShape();
+  const events = rows
+    .filter(p => LIVE_EVENT_RE.test(p.title))
+    .map(p => {
+      const isLive = p.start <= now && now < p.stop;
+      const cleanedTitle = stripLiveMarker(cleanTitle(p.title));
+      const name = isLive
+        ? `🔴 LIVE · ${cleanedTitle}`
+        : `Próximamente ${formatTime(p.start, TZ)} · ${cleanedTitle}`;
+      const generated = `${BASE_URL}/poster/channel/${p.slug}.webp`;
+      const poster = p.icon || generated;
+      const icon = p.logo_url || getEpgChannelIcon(p.epg_channel_id, p.epg_source_id);
+      return {
+        id: `iptv:${p.slug}:ev:${p.start}`,
+        type: 'tv',
+        name,
+        poster,
+        posterShape,
+        logo: icon || undefined,
+        description: `${cleanedTitle} · ${p.ch_name} · ${formatTime(p.start, TZ)}–${formatTime(p.stop, TZ)}`,
+        background: p.icon || generated,
+        _live: isLive,
+        _start: p.start,
+      };
+    })
+    .sort((a, b) => (a._live !== b._live ? (a._live ? -1 : 1) : a._start - b._start));
+
+  // strip internal sort keys
+  return events.map(({ _live, _start, ...rest }) => rest);
+}
+
 export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled = false } = {}) {
   const row = ignoreEnabled
-    ? db.prepare('SELECT id, display_mode, default_poster FROM rows WHERE slug=?').get(rowSlug)
-    : db.prepare('SELECT id, display_mode, default_poster FROM rows WHERE slug=? AND enabled=1').get(rowSlug);
+    ? db.prepare('SELECT id, display_mode, default_poster, show_events FROM rows WHERE slug=?').get(rowSlug)
+    : db.prepare('SELECT id, display_mode, default_poster, show_events FROM rows WHERE slug=? AND enabled=1').get(rowSlug);
   if (!row) return [];
 
   const isCanal = (row.display_mode || 'epg') === 'canal';
@@ -64,7 +120,7 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled =
 
   const posterShape = getPosterShape();
   const isPortrait = posterShape === 'poster';
-  return channels.map(ch => {
+  const channelMetas = channels.map(ch => {
     const map = epgMap(ch.id);
     const desc = buildDescription(ch, map);
     const channelIcon = ch.logo_url || (map ? getEpgChannelIcon(map.epg_channel_id, map.epg_source_id) : '');
@@ -72,17 +128,14 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled =
     const fanart = prog?.icon || '';
     const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
 
-    // Name: per-row custom_name wins, then mode determines the default
     const name = ch.custom_name || (isCanal ? ch.name : (prog ? `${cleanTitle(prog.title)} — ${ch.name}` : ch.name));
 
-    // Poster: per-row custom_poster wins, then mode determines the default
     let poster;
     if (ch.custom_poster) {
       poster = ch.custom_poster;
     } else if (isCanal) {
       poster = row.default_poster || generated;
     } else {
-      // EPG mode: portrait always uses generated (fanart is landscape-shaped)
       poster = isPortrait ? generated : (fanart || generated);
     }
 
@@ -97,6 +150,18 @@ export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled =
       background: fanart || generated,
     };
   });
+
+  if (row.show_events && skip === 0) {
+    return [...channelMetas, ...eventsForRow(row.id)];
+  }
+  return channelMetas;
+}
+
+// Used by the admin preview to show live event tiles alongside channels
+export function liveEventsForRow(rowSlug) {
+  const row = db.prepare('SELECT id, show_events FROM rows WHERE slug=?').get(rowSlug);
+  if (!row?.show_events) return [];
+  return eventsForRow(row.id);
 }
 
 function getPosterShape() {
@@ -109,6 +174,38 @@ function getEpgChannelIcon(channelId, sourceId) {
   return row?.icon || '';
 }
 
+export function eventMeta(slug, start) {
+  const ch = db.prepare('SELECT * FROM logical_channels WHERE slug=?').get(slug);
+  if (!ch) return null;
+  const map = epgMap(ch.id);
+  if (!map) return null;
+  const prog = db.prepare(`
+    SELECT title, start, stop, icon FROM programmes
+    WHERE epg_channel_id=? AND epg_source_id=? AND start=?
+  `).get(map.epg_channel_id, map.epg_source_id, Number(start));
+  if (!prog) return null;
+
+  const now = nowSec();
+  const isLive = prog.start <= now && now < prog.stop;
+  const cleanedTitle = stripLiveMarker(cleanTitle(prog.title));
+  const name = isLive
+    ? `🔴 LIVE · ${cleanedTitle}`
+    : `Próximamente ${formatTime(prog.start, TZ)} · ${cleanedTitle}`;
+  const icon = ch.logo_url || getEpgChannelIcon(map.epg_channel_id, map.epg_source_id);
+  const generated = `${BASE_URL}/poster/channel/${ch.slug}.webp`;
+  const shape = getPosterShape();
+  return {
+    id: `iptv:${slug}:ev:${start}`,
+    type: 'tv',
+    name,
+    poster: prog.icon || generated,
+    posterShape: shape,
+    logo: icon || undefined,
+    background: prog.icon || generated,
+    description: `${cleanedTitle} · ${ch.name} · ${formatTime(prog.start, TZ)}–${formatTime(prog.stop, TZ)}`,
+  };
+}
+
 export function channelMeta(slug) {
   const ch = db.prepare('SELECT * FROM logical_channels WHERE slug=?').get(slug);
   if (!ch) return null;
@@ -116,7 +213,6 @@ export function channelMeta(slug) {
   const map = epgMap(ch.id);
   const icon = ch.logo_url || (map ? getEpgChannelIcon(map.epg_channel_id, map.epg_source_id) : '');
 
-  // build today's programme list
   let schedule = '';
   if (map) {
     const todayStart = getTodayStart();

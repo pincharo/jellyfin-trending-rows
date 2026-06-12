@@ -3,7 +3,7 @@ import db from '../db.js';
 import { login, logout, requireAuth } from '../auth.js';
 import { refreshPlaylist } from '../services/playlistRefresh.js';
 import { refreshEpgSource, autoMatchEpg } from '../services/epgRefresh.js';
-import { channelsForRow } from '../services/catalog.js';
+import { channelsForRow, liveEventsForRow } from '../services/catalog.js';
 import { DOBLEM_EPG_URLS } from '../config.js';
 import { slugify, sha1hex } from '../util/index.js';
 import { getLogs } from '../util/logger.js';
@@ -164,18 +164,19 @@ router.delete('/rows/:id', (req, res) => {
 });
 
 router.put('/rows/:id', (req, res) => {
-  const { name, enabled, sort_order, display_mode, default_poster } = req.body;
+  const { name, enabled, sort_order, display_mode, default_poster, show_events } = req.body;
   const row = db.prepare('SELECT * FROM rows WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'No encontrada' });
   if (display_mode !== undefined && !['epg', 'canal'].includes(display_mode)) {
     return res.status(400).json({ error: "display_mode debe ser 'epg' o 'canal'" });
   }
-  db.prepare('UPDATE rows SET name=?,enabled=?,sort_order=?,display_mode=?,default_poster=? WHERE id=?').run(
+  db.prepare('UPDATE rows SET name=?,enabled=?,sort_order=?,display_mode=?,default_poster=?,show_events=? WHERE id=?').run(
     name ?? row.name,
     enabled ?? row.enabled,
     sort_order ?? row.sort_order,
     display_mode ?? row.display_mode ?? 'epg',
     default_poster !== undefined ? default_poster : (row.default_poster ?? ''),
+    show_events !== undefined ? (show_events ? 1 : 0) : (row.show_events ?? 0),
     row.id
   );
   res.json({ ok: true });
@@ -215,7 +216,13 @@ router.get('/rows/:id/preview', (req, res) => {
       custom_name: c.custom_name || '',
     };
   });
-  res.json({ orientation, displayMode, channels });
+  const events = liveEventsForRow(row.slug).map(e => ({
+    id: e.id,
+    name: e.name,
+    poster: e.poster,
+    live: e.name.startsWith('🔴'),
+  }));
+  res.json({ orientation, displayMode, showEvents: !!row.show_events, channels, events });
 });
 
 // channels in a row

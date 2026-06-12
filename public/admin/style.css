@@ -370,6 +370,16 @@ input::placeholder { color: var(--text2); }
   padding: .12rem .42rem; border-radius: 5px; backdrop-filter: blur(4px);
 }
 
+/* Event tiles — auto-generated from EPG, no tools overlay */
+.row-preview-card.rp-event { opacity: .92; }
+.rp-event-badge {
+  position: absolute; bottom: 6px; left: 6px; z-index: 2;
+  background: rgba(30,30,50,.8); color: #a0aec0; font-size: .62rem; font-weight: 700; letter-spacing: .04em;
+  padding: .1rem .38rem; border-radius: 5px; backdrop-filter: blur(4px); text-transform: uppercase;
+}
+.rp-event-badge.rp-live { background: #dc2626; color: #fff; }
+.badge-live { background: rgba(220,38,38,.18); color: #f87171; border: 1px solid rgba(220,38,38,.35); }
+
 .rp-tools {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: .35rem;
   background: rgba(4,6,12,.55); opacity: 0; transition: opacity .15s; border-radius: 10px; z-index: 3;

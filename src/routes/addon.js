@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { BASE_URL, ADDON_TOKEN } from '../config.js';
-import { channelsForRow, channelMeta, channelStreams } from '../services/catalog.js';
+import { channelsForRow, channelMeta, channelStreams, eventMeta } from '../services/catalog.js';
 import { logInfo, logWarn } from '../util/logger.js';
 
 const router = Router({ mergeParams: true });
@@ -72,8 +72,15 @@ router.get('/meta/tv/:id.json', (req, res) => {
   const id = req.params.id;
   if (!id.startsWith('iptv:')) return res.json({ meta: null });
 
-  const slug = id.slice(5);
-  const meta = channelMeta(slug);
+  const inner = id.slice(5); // e.g. "m-laliga-xxxx" or "m-laliga-xxxx:ev:1718200800"
+  const evIdx = inner.indexOf(':ev:');
+  if (evIdx !== -1) {
+    const slug  = inner.slice(0, evIdx);
+    const start = inner.slice(evIdx + 4);
+    return res.json({ meta: eventMeta(slug, start) || null });
+  }
+
+  const meta = channelMeta(inner);
   res.json({ meta: meta || null });
 });
 
@@ -82,7 +89,10 @@ router.get('/stream/tv/:id.json', (req, res) => {
   const id = req.params.id;
   if (!id.startsWith('iptv:')) return res.json({ streams: [] });
 
-  const slug = id.slice(5);
+  const inner = id.slice(5);
+  const evIdx = inner.indexOf(':ev:');
+  // event tiles play the underlying channel
+  const slug = evIdx !== -1 ? inner.slice(0, evIdx) : inner;
   const streams = channelStreams(slug);
   logInfo(`Addon: streams solicitados para "${slug}" → ${streams.length} fuentes`);
   res.json({ streams });

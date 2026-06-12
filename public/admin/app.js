@@ -748,7 +748,7 @@ const App = {
       return { row: r, ...prev };
     }));
     const el = $('rows-list');
-    el.innerHTML = sections.map(({ row, channels, orientation, displayMode }, idx) => {
+    el.innerHTML = sections.map(({ row, channels, events = [], orientation, displayMode, showEvents }, idx) => {
       const mode = displayMode || row.display_mode || 'epg';
       const modeLabel = mode === 'canal' ? 'Carátula' : 'EPG';
       const modeCls   = mode === 'canal' ? 'badge-accent' : 'badge-idle';
@@ -761,6 +761,7 @@ const App = {
           </div>
           <span class="row-name" id="row-name-${row.id}" onclick="App.editRowName(${row.id})" title="Clic para renombrar">${esc(row.name)}</span>
           <span class="badge ${modeCls}" title="Modo de visualización de la fila">${modeLabel}</span>
+          ${showEvents ? '<span class="badge badge-live" title="Tiles DIRECTO activos">🔴 eventos</span>' : ''}
           <span class="badge badge-idle">${channels.length} canal(es)</span>
           <div class="card-actions" style="margin-left:auto">
             <button class="mini-btn" onclick="App.openRowSettings(${row.id})" title="Configurar modo de la fila">${ICONS.gear}</button>
@@ -795,6 +796,19 @@ const App = {
             }).join('')}
           </div>
         ` : '<p class="row-empty" style="padding:.6rem .3rem">Vacía — pulsa "+ Canal" para añadir</p>'}
+        ${events.length ? `
+          <div class="row-preview" style="margin-top:.5rem;border-top:1px solid var(--border);padding-top:.5rem" title="Eventos DIRECTO en las próximas 24h">
+            ${events.map(e => `
+              <div class="row-preview-card row-preview-${orientation} rp-event">
+                <div class="row-preview-img row-preview-img-${orientation}">
+                  <span class="rp-event-badge ${e.live ? 'rp-live' : ''}">${e.live ? 'LIVE' : 'Próximo'}</span>
+                  <img src="${esc(e.poster)}" loading="lazy" onerror="this.className='rp-placeholder'" />
+                </div>
+                <div class="row-preview-name" title="${esc(e.name)}">${esc(e.name)}</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
       </div>`;
     }).join('') || `<div class="empty-state"><p>No hay filas todavía. Pulsa "+ Nueva fila" para crear una.</p></div>`;
   },
@@ -891,6 +905,11 @@ const App = {
         <label>Poster por defecto de la fila (URL) <span class="hint">— se usa cuando el modo es "Nombre de canal" y el canal no tiene poster propio</span></label>
         <input id="row-default-poster" value="${esc(row.default_poster || '')}" placeholder="https://…" />
       </div>
+      <label class="switch-label" style="margin:.8rem 0 1rem">
+        <span class="switch"><input type="checkbox" id="row-show-events" ${row.show_events ? 'checked' : ''} /><span class="track"></span></span>
+        Mostrar eventos <b>🔴 DIRECTO</b> como tiles extra (LIVE / Próximamente)
+      </label>
+      <p class="hint" style="margin-top:-.5rem;margin-bottom:1rem">Los programas del EPG que contengan "DIRECTO" o "🔴" en el título aparecerán como tiles adicionales al final de la fila con un badge LIVE (si emite ahora) o Próximamente.</p>
       <div class="form-actions">
         <button class="btn-ghost" onclick="closeModal()">Cancelar</button>
         <button class="btn btn-grad" onclick="App.saveRowSettings(${rowId})">Guardar</button>
@@ -907,8 +926,9 @@ const App = {
   async saveRowSettings(rowId) {
     const mode = document.querySelector('#row-mode-btns .orient-active')?.dataset.mode || 'epg';
     const defaultPoster = $('row-default-poster')?.value.trim() || '';
+    const show_events = $('row-show-events')?.checked ? 1 : 0;
     try {
-      await api('PUT', `/rows/${rowId}`, { display_mode: mode, default_poster: defaultPoster });
+      await api('PUT', `/rows/${rowId}`, { display_mode: mode, default_poster: defaultPoster, show_events });
       toast('Configuración guardada', 'ok');
       closeModal();
       await this.loadRows();
