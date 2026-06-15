@@ -23,6 +23,11 @@ const SAMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
   <programme start="20260610210000 +0200" stop="20260610230000 +0200" channel="M+ LaLiga HD">
     <title>Post partido</title>
   </programme>
+  <programme start="20260611170000 +0200" stop="20260611190000 +0200" channel="M+ LaLiga HD">
+    <title>DIRECTO Grupo H: España - Cabo Verde [COLOR tomato]T2026[/COLOR] [COLOR goldenrod]Mundial 2026[/COLOR]</title>
+    <desc>[COLOR SlateBlue]Deportes,Fútbol[/COLOR] | [COLOR cadetblue]2026[/COLOR]</desc>
+    <category>Deportes, Fútbol</category>
+  </programme>
 </tv>`;
 
 async function collect(stream) {
@@ -47,7 +52,7 @@ test('parses channels with first display-name and icon', async () => {
 
 test('parses programmes with times, title and categories', async () => {
   const { programmes } = await collect(Readable.from(Buffer.from(SAMPLE_XML)));
-  assert.equal(programmes.length, 2);
+  assert.equal(programmes.length, 3);
 
   const clasico = programmes[0];
   assert.equal(clasico.epg_channel_id, 'M+ LaLiga HD');
@@ -67,11 +72,19 @@ test('handles programmes without sub-title', async () => {
   assert.deepEqual(programmes[1].categories, []);
 });
 
+test('reads the canonical <category> element (color1 guides have no sub-title)', async () => {
+  const { programmes } = await collect(Readable.from(Buffer.from(SAMPLE_XML)));
+  const match = programmes[2];
+  assert.deepEqual(match.categories, ['deportes', 'fútbol']);
+  // title keeps full text; Kodi tags stripped
+  assert.equal(match.title, 'DIRECTO Grupo H: España - Cabo Verde T2026 Mundial 2026');
+});
+
 test('transparently decompresses gzip input', async () => {
   const gz = gzipSync(Buffer.from(SAMPLE_XML));
   const { channels, programmes } = await collect(Readable.from(gz));
   assert.equal(channels.length, 2);
-  assert.equal(programmes.length, 2);
+  assert.equal(programmes.length, 3);
 });
 
 test('rejects on malformed XML', async () => {

@@ -349,6 +349,14 @@ test('show_events: DIRECTO programmes appear as event tiles in catalog', async (
     VALUES(?,?,?,?,?,?,?,?,?)`)
     .run(epgSourceId, 'M+ LaLiga HD', now + 11000, now + 14400, 'Documental: Historia del Fútbol', '', '', '[]', '');
 
+  // Insert: DIRECTO pre-match studio show (category "Programa deportes") — must NOT
+  // appear as an event; only actual matches should. This is the dobleM prepartido case.
+  db.prepare(`INSERT OR IGNORE INTO programmes(epg_source_id,epg_channel_id,start,stop,title,sub_title,description,categories,icon)
+    VALUES(?,?,?,?,?,?,?,?,?)`)
+    .run(epgSourceId, 'M+ LaLiga HD', now - 1200, now + 1800,
+      'DIRECTO Prepartido España - Cabo Verde T1 DAZN Mundial', '',
+      'Deportes,Programa deportes | 2026 | TP', '["deportes","programa deportes"]', '');
+
   // Enable show_events on the fútbol row
   const r = await fetch(`${baseUrl}/api/admin/rows/${futbolRow.id}`, {
     method: 'PUT', headers, body: JSON.stringify({ show_events: 1 }),
@@ -373,6 +381,10 @@ test('show_events: DIRECTO programmes appear as event tiles in catalog', async (
 
   // Normal programme does NOT appear as event tile
   assert.ok(!cat.metas.some(m => m.id.includes(':ev:') && m.name.includes('Documental')));
+
+  // Studio/pre-match show (category "Programa deportes") does NOT appear as event tile
+  assert.ok(!cat.metas.some(m => m.id.includes(':ev:') && m.name.includes('Prepartido')),
+    'prepartido studio show must be filtered out');
 
   // meta endpoint resolves for event ID
   const metaRes = await (await fetch(`${baseUrl}/test-token/meta/tv/${liveEvent.id}.json`)).json();

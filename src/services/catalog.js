@@ -17,6 +17,36 @@ function stripLiveMarker(t) {
   return t.replace(/^🔴\s*/u, '').replace(/^DIRECTO\s*/i, '').trim();
 }
 
+// dobleM tags studio/pre/post/highlight shows with category "Programa deportes";
+// actual competitions use the real sport (Fútbol, Tenis, Golf, Ciclismo…). We only
+// want the real events — not "Prepartido", "Postpartido", "Dazoneta", "Resúmenes"…
+const STUDIO_CAT_RE = /programa\s*deportes/i;
+const NON_EVENT_TITLE_RE = /\b(pre-?partido|post-?partido)\b/i;
+
+function isStudioProgramme(categories, description) {
+  // categories: parsed <category> stored as JSON like '["deportes","programa deportes"]'
+  if (STUDIO_CAT_RE.test(categories || '')) return true;
+  // fallback for programmes parsed before <category> support: the dobleM desc begins
+  // with the category, e.g. "Deportes,Programa deportes | 2026 | TP | …"
+  return STUDIO_CAT_RE.test((description || '').split('|')[0]);
+}
+
+// A programme is a real event tile iff it is a live broadcast (DIRECTO/🔴) of an
+// actual competition — not a studio/preview/post-match show.
+function isRealEvent(p) {
+  if (!LIVE_EVENT_RE.test(p.title)) return false;
+  if (NON_EVENT_TITLE_RE.test(p.title)) return false;
+  if (isStudioProgramme(p.categories, p.description)) return false;
+  return true;
+}
+
+// color1 titles read "DIRECTO {evento} [tomato]T{temporada}[/] [goldenrod]{programa}[/]";
+// after Kodi tags are stripped that tail becomes " T2026 Mundial 2026" noise — drop it.
+// "DIRECTO Grupo H: España - Cabo Verde T2026 Mundial 2026" → "Grupo H: España - Cabo Verde"
+function eventName(title) {
+  return stripLiveMarker(cleanTitle(title)).replace(/\s+T\d+\b.*$/, '').trim();
+}
+
 function nowSec() { return Math.floor(Date.now() / 1000); }
 
 function currentProgramme(epgChannelId, epgSourceId) {
@@ -57,7 +87,7 @@ function buildDescription(ch, map) {
 function eventsForRow(rowId) {
   const now = nowSec();
   const rows = db.prepare(`
-    SELECT p.title, p.start, p.stop, p.icon,
+    SELECT p.title, p.start, p.stop, p.icon, p.categories, p.description,
            lc.slug, lc.name AS ch_name, lc.logo_url,
            m.epg_channel_id, m.epg_source_id
     FROM programmes p
@@ -71,10 +101,10 @@ function eventsForRow(rowId) {
 
   const posterShape = getPosterShape();
   const events = rows
-    .filter(p => LIVE_EVENT_RE.test(p.title))
+    .filter(isRealEvent)
     .map(p => {
       const isLive = p.start <= now && now < p.stop;
-      const cleanedTitle = stripLiveMarker(cleanTitle(p.title));
+      const cleanedTitle = eventName(p.title);
       const name = isLive
         ? `🔴 LIVE · ${cleanedTitle}`
         : `Próximamente ${formatTime(p.start, TZ)} · ${cleanedTitle}`;
@@ -192,7 +222,7 @@ export function eventMeta(slug, start) {
 
   const now = nowSec();
   const isLive = prog.start <= now && now < prog.stop;
-  const cleanedTitle = stripLiveMarker(cleanTitle(prog.title));
+  const cleanedTitle = eventName(prog.title);
   const name = isLive
     ? `🔴 LIVE · ${cleanedTitle}`
     : `Próximamente ${formatTime(prog.start, TZ)} · ${cleanedTitle}`;

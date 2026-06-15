@@ -39,7 +39,7 @@ export async function parseXMLTV(readableStream, { onChannel, onProgramme } = {}
         epg_channel_id: attributes.channel,
         start: parseXmltvTime(attributes.start || ''),
         stop:  parseXmltvTime(attributes.stop  || ''),
-        title: '', sub_title: '', description: '', categories: [], icon: '',
+        title: '', sub_title: '', description: '', categories: [], categoryTags: [], icon: '',
       };
       collectText = false;
       return;
@@ -51,7 +51,7 @@ export async function parseXMLTV(readableStream, { onChannel, onProgramme } = {}
     }
 
     if (inProgramme) {
-      if (name === 'title' || name === 'sub-title' || name === 'desc') collectText = true;
+      if (name === 'title' || name === 'sub-title' || name === 'desc' || name === 'category') collectText = true;
       if (name === 'icon' && !currentProg.icon) currentProg.icon = attributes.src || '';
     }
   });
@@ -87,12 +87,25 @@ export async function parseXMLTV(readableStream, { onChannel, onProgramme } = {}
       if (name === 'title')     { currentProg.title       = currentText.trim(); collectText = false; }
       if (name === 'sub-title') { currentProg.sub_title   = currentText.trim(); collectText = false; }
       if (name === 'desc')      { currentProg.description = currentText.trim(); collectText = false; }
+      if (name === 'category')  { if (currentText.trim()) currentProg.categoryTags.push(currentText.trim()); collectText = false; }
 
       if (name === 'programme') {
         inProgramme = false;
         if (onProgramme && currentProg.start && currentProg.stop) {
-          // categories first: they live inside the [COLOR] markup we strip below
-          currentProg.categories = extractSubtitleCategories(currentProg.sub_title);
+          // categories: prefer the canonical <category> element ("Deportes, Fútbol");
+          // fall back to the [COLOR SlateBlue] markup dobleM embeds in the sub-title
+          // (old "color" guide) or in the desc ("color1" guide, which has no sub-title)
+          let cats = [];
+          for (const c of currentProg.categoryTags) {
+            for (const part of c.split(',')) {
+              const v = part.trim().toLowerCase();
+              if (v) cats.push(v);
+            }
+          }
+          if (!cats.length) cats = extractSubtitleCategories(currentProg.sub_title);
+          if (!cats.length) cats = extractSubtitleCategories(currentProg.description);
+          currentProg.categories = cats;
+          delete currentProg.categoryTags;
           currentProg.title = stripKodiTags(currentProg.title);
           currentProg.sub_title = stripKodiTags(currentProg.sub_title);
           currentProg.description = stripKodiTags(currentProg.description);
