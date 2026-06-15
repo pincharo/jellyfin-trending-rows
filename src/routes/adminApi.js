@@ -164,19 +164,20 @@ router.delete('/rows/:id', (req, res) => {
 });
 
 router.put('/rows/:id', (req, res) => {
-  const { name, enabled, sort_order, display_mode, default_poster, show_events } = req.body;
+  const { name, enabled, sort_order, display_mode, default_poster, show_events, events_only } = req.body;
   const row = db.prepare('SELECT * FROM rows WHERE id=?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'No encontrada' });
   if (display_mode !== undefined && !['epg', 'canal'].includes(display_mode)) {
     return res.status(400).json({ error: "display_mode debe ser 'epg' o 'canal'" });
   }
-  db.prepare('UPDATE rows SET name=?,enabled=?,sort_order=?,display_mode=?,default_poster=?,show_events=? WHERE id=?').run(
+  db.prepare('UPDATE rows SET name=?,enabled=?,sort_order=?,display_mode=?,default_poster=?,show_events=?,events_only=? WHERE id=?').run(
     name ?? row.name,
     enabled ?? row.enabled,
     sort_order ?? row.sort_order,
     display_mode ?? row.display_mode ?? 'epg',
     default_poster !== undefined ? default_poster : (row.default_poster ?? ''),
     show_events !== undefined ? (show_events ? 1 : 0) : (row.show_events ?? 0),
+    events_only !== undefined ? (events_only ? 1 : 0) : (row.events_only ?? 0),
     row.id
   );
   res.json({ ok: true });
@@ -222,7 +223,7 @@ router.get('/rows/:id/preview', (req, res) => {
     poster: e.poster,
     live: e.name.startsWith('🔴'),
   }));
-  res.json({ orientation, displayMode, showEvents: !!row.show_events, channels, events });
+  res.json({ orientation, displayMode, showEvents: !!row.show_events, eventsOnly: !!row.events_only, channels, events });
 });
 
 // channels in a row

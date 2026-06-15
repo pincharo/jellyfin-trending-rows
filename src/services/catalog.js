@@ -102,9 +102,14 @@ function eventsForRow(rowId) {
 
 export function channelsForRow(rowSlug, skip = 0, limit = 100, { ignoreEnabled = false } = {}) {
   const row = ignoreEnabled
-    ? db.prepare('SELECT id, display_mode, default_poster, show_events FROM rows WHERE slug=?').get(rowSlug)
-    : db.prepare('SELECT id, display_mode, default_poster, show_events FROM rows WHERE slug=? AND enabled=1').get(rowSlug);
+    ? db.prepare('SELECT id, display_mode, default_poster, show_events, events_only FROM rows WHERE slug=?').get(rowSlug)
+    : db.prepare('SELECT id, display_mode, default_poster, show_events, events_only FROM rows WHERE slug=? AND enabled=1').get(rowSlug);
   if (!row) return [];
+
+  // events_only: skip channel tiles entirely, return only event tiles
+  if (row.show_events && row.events_only) {
+    return skip === 0 ? eventsForRow(row.id) : [];
+  }
 
   const isCanal = (row.display_mode || 'epg') === 'canal';
 

@@ -10,7 +10,7 @@ const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS settings (
@@ -47,7 +47,8 @@ db.exec(`
     enabled        INTEGER DEFAULT 1,
     display_mode   TEXT DEFAULT 'epg',
     default_poster TEXT DEFAULT '',
-    show_events    INTEGER DEFAULT 0
+    show_events    INTEGER DEFAULT 0,
+    events_only    INTEGER DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS logical_channels (
@@ -165,6 +166,11 @@ if (currentVersion < 4) {
 if (currentVersion < 5) {
   try { db.exec("ALTER TABLE rows ADD COLUMN show_events INTEGER DEFAULT 0"); } catch {}
   db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('schema_version','5')").run();
+}
+
+if (currentVersion < 6) {
+  try { db.exec("ALTER TABLE rows ADD COLUMN events_only INTEGER DEFAULT 0"); } catch {}
+  db.prepare("INSERT OR REPLACE INTO settings(key,value) VALUES('schema_version','6')").run();
 }
 
 export default db;

@@ -748,7 +748,7 @@ const App = {
       return { row: r, ...prev };
     }));
     const el = $('rows-list');
-    el.innerHTML = sections.map(({ row, channels, events = [], orientation, displayMode, showEvents }, idx) => {
+    el.innerHTML = sections.map(({ row, channels, events = [], orientation, displayMode, showEvents, eventsOnly }, idx) => {
       const mode = displayMode || row.display_mode || 'epg';
       const modeLabel = mode === 'canal' ? 'Carátula' : 'EPG';
       const modeCls   = mode === 'canal' ? 'badge-accent' : 'badge-idle';
@@ -762,7 +762,8 @@ const App = {
           <span class="row-name" id="row-name-${row.id}" onclick="App.editRowName(${row.id})" title="Clic para renombrar">${esc(row.name)}</span>
           <span class="badge ${modeCls}" title="Modo de visualización de la fila">${modeLabel}</span>
           ${showEvents ? '<span class="badge badge-live" title="Tiles DIRECTO activos">🔴 eventos</span>' : ''}
-          <span class="badge badge-idle">${channels.length} canal(es)</span>
+          ${eventsOnly ? '' : `<span class="badge badge-idle">${channels.length} canal(es)</span>`}
+          ${eventsOnly && showEvents ? `<span class="badge badge-idle">${channels.length} canal(es) — solo eventos</span>` : ''}
           <div class="card-actions" style="margin-left:auto">
             <button class="mini-btn" onclick="App.openRowSettings(${row.id})" title="Configurar modo de la fila">${ICONS.gear}</button>
             <label class="switch-label" title="Visible en el addon">
@@ -772,7 +773,7 @@ const App = {
             <button class="mini-btn mini-danger" onclick="App.deleteRow(${row.id},'${escAttr(row.name)}')" title="Eliminar fila">${ICONS.x}</button>
           </div>
         </div>
-        ${channels.length ? `
+        ${channels.length && !eventsOnly ? `
           <div class="row-preview" title="Previsualización — así aparecerá en Stremio/Nuvio">
             ${channels.map((c, ci) => {
               const hasCustom = !!(c.custom_poster || c.custom_name);
@@ -905,11 +906,17 @@ const App = {
         <label>Poster por defecto de la fila (URL) <span class="hint">— se usa cuando el modo es "Nombre de canal" y el canal no tiene poster propio</span></label>
         <input id="row-default-poster" value="${esc(row.default_poster || '')}" placeholder="https://…" />
       </div>
-      <label class="switch-label" style="margin:.8rem 0 1rem">
-        <span class="switch"><input type="checkbox" id="row-show-events" ${row.show_events ? 'checked' : ''} /><span class="track"></span></span>
-        Mostrar eventos <b>🔴 DIRECTO</b> como tiles extra (LIVE / Próximamente)
+      <label class="switch-label" style="margin:.8rem 0 .5rem">
+        <span class="switch"><input type="checkbox" id="row-show-events" ${row.show_events ? 'checked' : ''}
+          onchange="document.getElementById('row-events-only-wrap').style.display=this.checked?'':'none'" /><span class="track"></span></span>
+        Mostrar eventos <b>🔴 DIRECTO</b> como tiles (LIVE / Próximamente)
       </label>
-      <p class="hint" style="margin-top:-.5rem;margin-bottom:1rem">Los programas del EPG que contengan "DIRECTO" o "🔴" en el título aparecerán como tiles adicionales al final de la fila con un badge LIVE (si emite ahora) o Próximamente.</p>
+      <div id="row-events-only-wrap" style="margin-left:1.6rem;margin-bottom:.8rem;${row.show_events ? '' : 'display:none'}">
+        <label class="switch-label">
+          <span class="switch"><input type="checkbox" id="row-events-only" ${row.events_only ? 'checked' : ''} /><span class="track"></span></span>
+          <span>Solo mostrar los partidos <span class="hint">(ocultar el tile del canal)</span></span>
+        </label>
+      </div>
       <div class="form-actions">
         <button class="btn-ghost" onclick="closeModal()">Cancelar</button>
         <button class="btn btn-grad" onclick="App.saveRowSettings(${rowId})">Guardar</button>
@@ -927,8 +934,9 @@ const App = {
     const mode = document.querySelector('#row-mode-btns .orient-active')?.dataset.mode || 'epg';
     const defaultPoster = $('row-default-poster')?.value.trim() || '';
     const show_events = $('row-show-events')?.checked ? 1 : 0;
+    const events_only = $('row-events-only')?.checked ? 1 : 0;
     try {
-      await api('PUT', `/rows/${rowId}`, { display_mode: mode, default_poster: defaultPoster, show_events });
+      await api('PUT', `/rows/${rowId}`, { display_mode: mode, default_poster: defaultPoster, show_events, events_only });
       toast('Configuración guardada', 'ok');
       closeModal();
       await this.loadRows();
