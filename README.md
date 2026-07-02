@@ -17,7 +17,7 @@ Designed to work on any theme, but certain themes may require some manual adjust
 
 ## Features
 
-- **Configurable** — Enable or disable Platforms, Franchises, Trending Movies, Trending Shows, and more
+- **Configurable** — Enable or disable Platforms, Franchises, Trending Movies, Trending Shows, row order, and more
 - **Works on any theme** — Designed to use Jellyfin's native attributes, allowing themes to make adjustments accordingly.
 - **Instant ID matching** — Builds a `Map` of TMDB/IMDB IDs from your entire catalog for O(1) lookups. No sequential API calls per trending item.
 - **Fallback matching** — If provider IDs are missing, falls back to title + year comparison.
@@ -101,6 +101,11 @@ const SHOW_PLATFORMS = true;
 const SHOW_FRANCHISES = true;
 const SHOW_TRENDING_RANK_NUMBERS = true;
 const LIMIT = 50;
+
+const ROW_ORDER_TRENDING_MOVIES = 1;
+const ROW_ORDER_TRENDING_SHOWS = 2;
+const ROW_ORDER_PLATFORMS = 3;
+const ROW_ORDER_FRANCHISES = 4;
 ```
 
 ### Row visibility
