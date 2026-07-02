@@ -14,6 +14,12 @@
     const SHOW_TRENDING_RANK_NUMBERS = true;    // Show the movie's ranking badge
     const LIMIT = 25;                           // How many movies/shows/cards to display (max 50)
 
+    // Row orders (lower = higher on home screen)
+    const ROW_ORDER_TRENDING_MOVIES = 1;
+    const ROW_ORDER_TRENDING_SHOWS = 2;
+    const ROW_ORDER_PLATFORMS = 3;
+    const ROW_ORDER_FRANCHISES = 4;
+
     /* ═══════════════════════════════════════════════════════════════
         PLATFORMS — streaming service hubs
         tag must match the Jellyfin tag on your items.
@@ -180,9 +186,8 @@
         s.id = "jfcr-css";
 
         s.textContent = `
-            #custom-rows-wrapper {
+            .custom-jf-row {
                 display: block;
-                margin-bottom: 20px;
             }
 
             .top10-section {
@@ -1096,7 +1101,7 @@
     function injectUI() {
         if (!isHomePage()) return;
 
-        const existing = document.getElementById("custom-rows-wrapper");
+        const existing = document.getElementById("custom-rows-marker");
         if (existing) return;
 
         const container =
@@ -1108,30 +1113,46 @@
 
         injectCSS();
 
-        const wrapper = document.createElement("div");
-        wrapper.id = "custom-rows-wrapper";
-        wrapper.className = "verticalSection customTrendingSection";
-        wrapper.style.order = "2";
+        const rows = [
+            {
+                enabled: SHOW_PLATFORMS,
+                order: ROW_ORDER_PLATFORMS,
+                build: buildPlatformSection
+            },
+            {
+                enabled: SHOW_FRANCHISES,
+                order: ROW_ORDER_FRANCHISES,
+                build: buildFranchiseSection
+            },
+            {
+                enabled: SHOW_TRENDING_MOVIES,
+                order: ROW_ORDER_TRENDING_MOVIES,
+                build: () => buildTop10Section("Trending Movies", "movie")
+            },
+            {
+                enabled: SHOW_TRENDING_SHOWS,
+                order: ROW_ORDER_TRENDING_SHOWS,
+                build: () => buildTop10Section("Trending Shows", "tv")
+            }
+        ]
+            .filter(row => row.enabled)
+            .sort((a, b) => a.order - b.order);
 
-        if (SHOW_PLATFORMS) {
-            wrapper.appendChild(buildPlatformSection());
+        if (!rows.length) return;
+
+        const marker = document.createElement("div");
+        marker.id = "custom-rows-marker";
+        marker.style.display = "none";
+        container.appendChild(marker);
+
+        for (const rowConfig of rows) {
+            const row = rowConfig.build();
+
+            row.classList.add("custom-jf-row");
+            row.style.order = String(rowConfig.order);
+
+            container.appendChild(row);
         }
-
-        if (SHOW_FRANCHISES) {
-            wrapper.appendChild(buildFranchiseSection());
-        }
-
-        if (SHOW_TRENDING_MOVIES) {
-            wrapper.appendChild(buildTop10Section("Trending Movies", "movie"));
-        }
-
-        if (SHOW_TRENDING_SHOWS) {
-            wrapper.appendChild(buildTop10Section("Trending Shows", "tv"));
-        }
-
-        if (!wrapper.children.length) return;
-
-        container.appendChild(wrapper);
 
         setTimeout(() => {
             window.dispatchEvent(new Event("resize"));
@@ -1141,8 +1162,12 @@
     function removeUIWhenLeavingHome() {
         if (isHomePage()) return;
 
-        const existing = document.getElementById("custom-rows-wrapper");
-        if (existing) existing.remove();
+        const marker = document.getElementById("custom-rows-marker");
+        if (marker) marker.remove();
+
+        document.querySelectorAll(".custom-jf-row").forEach(row => {
+            row.remove();
+        });
     }
 
     const observer = new MutationObserver(() => {
